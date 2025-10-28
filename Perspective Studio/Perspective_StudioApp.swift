@@ -6,33 +6,12 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct Perspective_StudioApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
-
     var body: some Scene {
         WindowGroup {
             ContentView()
-        }
-        .modelContainer(sharedModelContainer)
-        .commands {
-            // Placeholder for future global commands (e.g., toggle sidebar, new chat, etc.)
-            CommandMenu("Perspective Studio") {
-                Button("About Perspective Studio") { NSApp.orderFrontStandardAboutPanel(nil) }
-            }
         }
     }
 }
