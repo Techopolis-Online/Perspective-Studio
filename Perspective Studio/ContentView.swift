@@ -8,16 +8,38 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject private var appViewModel: AppViewModel
+
     var body: some View {
-        VStack {
-            Text("Hello, World!")
-                .font(.largeTitle)
-                .padding()
+        Group {
+            switch appViewModel.phase {
+            case .onboarding:
+                OnboardingFlowHost(appViewModel: appViewModel)
+            case .ready:
+                MainWindowView()
+            }
         }
-        .frame(minWidth: 400, minHeight: 300)
+        .sheet(isPresented: $appViewModel.showKeyboardShortcuts) {
+            KeyboardShortcutsView()
+                .environmentObject(appViewModel)
+                .frame(minWidth: 500, minHeight: 400)
+        }
+    }
+}
+
+private struct OnboardingFlowHost: View {
+    @StateObject private var viewModel: OnboardingViewModel
+
+    init(appViewModel: AppViewModel) {
+        _viewModel = StateObject(wrappedValue: OnboardingViewModel(appViewModel: appViewModel))
+    }
+
+    var body: some View {
+        OnboardingFlowView(viewModel: viewModel)
     }
 }
 
 #Preview {
     ContentView()
+        .environmentObject(AppViewModel(phase: .ready))
 }
