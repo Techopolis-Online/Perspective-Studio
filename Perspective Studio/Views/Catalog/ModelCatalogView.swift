@@ -25,7 +25,30 @@ struct ModelCatalogView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             header
+            
+            // Error banner
+            if let error = viewModel.lastError {
+                ErrorBanner(
+                    error: error,
+                    onDismiss: { viewModel.dismissError() },
+                    onRetry: { viewModel.refresh() }
+                )
+            }
+            
             filters
+            
+            // Loading indicator
+            if viewModel.isRefreshing {
+                HStack {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Refreshing catalog...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+            }
+            
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 20) {
                     ForEach(viewModel.filteredModels) { model in
@@ -290,5 +313,66 @@ private struct TagChip: View {
                     .fill(Color.accentColor.opacity(0.12))
             )
             .foregroundStyle(.primary)
+    }
+}
+
+private struct ErrorBanner: View {
+    let error: NetworkError
+    let onDismiss: () -> Void
+    let onRetry: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(.orange)
+                .accessibilityHidden(true)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Network Error")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                
+                if let description = error.errorDescription {
+                    Text(description)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                
+                if let suggestion = error.recoverySuggestion {
+                    Text(suggestion)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 2)
+                }
+            }
+            
+            Spacer()
+            
+            VStack(spacing: 8) {
+                Button("Retry") {
+                    onRetry()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+                
+                Button("Dismiss") {
+                    onDismiss()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.orange.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Error: \(error.errorDescription ?? "Network error occurred")")
     }
 }
