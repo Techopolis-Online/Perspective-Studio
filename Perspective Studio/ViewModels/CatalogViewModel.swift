@@ -80,7 +80,7 @@ final class CatalogViewModel: ObservableObject {
                 await MainActor.run {
                     lastError = error
                     isRefreshing = false
-                    VoiceOverAnnouncer.announce("Catalog refresh failed: \(error.localizedDescription ?? "Unknown error")")
+                    VoiceOverAnnouncer.announce("Catalog refresh failed: \(error.errorDescription ?? "Unknown error")")
                 }
             } catch {
                 await MainActor.run {
