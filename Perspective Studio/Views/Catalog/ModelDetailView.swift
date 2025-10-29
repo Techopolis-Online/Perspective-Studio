@@ -114,15 +114,21 @@ struct ModelDetailView: View {
     private var tipsSection: some View {
         let tips = model.beginnerTips(for: systemInfo)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Helpful pointers")
+            Text("Helpful Information")
                 .font(.headline)
             VStack(alignment: .leading, spacing: 6) {
                 ForEach(tips, id: \.self) { tip in
-                    Label(tip, systemImage: "lightbulb")
+                    Label(tip, systemImage: "lightbulb.fill")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(tip)
                 }
+                
+                // Add download information
+                Label("Downloads are resumable and verified for integrity", systemImage: "checkmark.shield.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("Downloads are resumable and verified for integrity")
             }
             .padding(12)
             .background(
@@ -184,7 +190,7 @@ struct ModelDetailView: View {
             Button {
                 onDownload()
             } label: {
-                Label("Download Model", systemImage: "arrow.down.circle")
+                Label("Download Model", systemImage: "arrow.down.circle.fill")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
@@ -199,13 +205,26 @@ struct ModelDetailView: View {
             .disabled(isPreferred)
             .accessibilityHint("Marks this model as your default choice")
 
-            if model.sourceURL != nil {
+            if model.host == .huggingFace, let sourceURL = model.sourceURL {
+                Button {
+                    onOpenSource()
+                } label: {
+                    Label("Open on Hugging Face", systemImage: "safari")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityHint("Opens the model page on Hugging Face in your browser")
+            } else if let sourceURL = model.sourceURL {
                 Button {
                     onOpenSource()
                 } label: {
                     Label("Open Model Page", systemImage: "safari")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.link)
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .accessibilityHint("Opens the model page in your browser")
             }
         }
         .padding(.top, 12)

@@ -17,7 +17,7 @@ struct ModelCatalogView: View {
     @FocusState private var focusedModelID: ModelMetadata.ID?
 
     private let gridColumns = [
-        GridItem(.flexible(), spacing: 12)
+        GridItem(.adaptive(minimum: 280, maximum: 400), spacing: 16)
     ]
 
     init(viewModel: CatalogViewModel) {
@@ -29,7 +29,7 @@ struct ModelCatalogView: View {
             header
             filters
             ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: 20) {
+                LazyVGrid(columns: gridColumns, spacing: 16) {
                     ForEach(viewModel.filteredModels) { model in
                         CatalogRow(
                             model: model,
@@ -41,7 +41,8 @@ struct ModelCatalogView: View {
                         .focused($focusedModelID, equals: model.id)
                     }
                 }
-                .padding(.bottom, 12)
+                .padding(.bottom, 16)
+                .padding(.horizontal, 4)
             }
         }
         .padding()
@@ -199,15 +200,34 @@ private struct CatalogRow: View {
 
     var body: some View {
         Button(action: onActivate) {
-            Text(model.name)
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 18)
-                .background(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(isFocused ? Color.accentColor.opacity(0.18) : Color.clear)
-                )
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(model.name)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    if isPreferred {
+                        Image(systemName: "star.fill")
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                            .accessibilityLabel("Preferred")
+                    }
+                }
+                Text(model.formattedSize)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 14)
+            .padding(.horizontal, 18)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(isFocused ? Color.accentColor.opacity(0.18) : Color(NSColor.controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
         .contentShape(Rectangle())
@@ -216,7 +236,11 @@ private struct CatalogRow: View {
     }
 
     private var accessibilityLabel: String {
-        isPreferred ? "\(model.name), preferred model" : model.name
+        let sizeInfo = "\(model.formattedSize)"
+        if isPreferred {
+            return "\(model.name), \(sizeInfo), preferred model"
+        }
+        return "\(model.name), \(sizeInfo)"
     }
 }
 
