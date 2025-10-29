@@ -221,10 +221,10 @@ We use Git Flow to manage releases and features:
 
 ```
 main              # Production-ready code (App Store releases)
-  ├── develop     # Integration branch for features
-       ├── feature/chat-interface
-       ├── feature/rag-support
-       └── feature/local-endpoint
+  develop         # Integration branch for features
+    feature/chat-interface
+    feature/rag-support
+    feature/local-endpoint
 ```
 
 #### Branch Types
