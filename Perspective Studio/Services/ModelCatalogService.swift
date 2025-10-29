@@ -185,7 +185,8 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
         var aggregated: [ModelMetadata] = []
 
         do {
-            let huggingFaceModels = try await fetchHuggingFaceModels(limit: 400)
+            // Fetch up to 10,000 models from HuggingFace (pagination will continue until all are fetched or limit reached)
+            let huggingFaceModels = try await fetchHuggingFaceModels(limit: 10_000)
             aggregated.append(contentsOf: huggingFaceModels)
             NSLog("Successfully fetched \(huggingFaceModels.count) models from Hugging Face")
         } catch let error as RemoteCatalogError {
@@ -195,7 +196,8 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
         }
 
         do {
-            let ollamaModels = try await fetchOllamaModels(limit: 60)
+            // Fetch all available Ollama models (no artificial limit)
+            let ollamaModels = try await fetchOllamaModels(limit: Int.max)
             aggregated.append(contentsOf: ollamaModels)
             NSLog("Successfully fetched \(ollamaModels.count) models from Ollama")
         } catch let error as RemoteCatalogError {
@@ -263,28 +265,33 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
 
         let queries: [HuggingFaceQuery] = [
+            // Sort by most popular/downloaded models
             .init(label: "top-downloads", parameters: [
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
                 "full": "1"
             ]),
+            // Trending models
             .init(label: "trending", parameters: [
                 "sort": "trending",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
                 "full": "1"
             ]),
+            // GGUF format filter (optimized for local inference)
             .init(label: "gguf-filter", parameters: [
                 "filter": "gguf",
                 "pipeline_tag": "text-generation",
                 "full": "1"
             ]),
+            // Search for GGUF models
             .init(label: "search-gguf", parameters: [
                 "search": "GGUF",
                 "pipeline_tag": "text-generation",
                 "full": "1"
             ]),
+            // Popular quantized model provider
             .init(label: "thebloke", parameters: [
                 "author": "TheBloke",
                 "sort": "downloads",
@@ -292,9 +299,59 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 "pipeline_tag": "text-generation",
                 "full": "1"
             ]),
+            // LM Studio curated models
             .init(label: "lmstudio", parameters: [
                 "author": "lmstudio-ai",
                 "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            // Popular model providers and formats
+            .init(label: "bartowski", parameters: [
+                "author": "bartowski",
+                "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            .init(label: "microsoft", parameters: [
+                "author": "microsoft",
+                "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            .init(label: "meta-llama", parameters: [
+                "author": "meta-llama",
+                "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            .init(label: "mistralai", parameters: [
+                "author": "mistralai",
+                "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            .init(label: "google", parameters: [
+                "author": "google",
+                "sort": "downloads",
+                "direction": "-1",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            // Additional GGUF search
+            .init(label: "search-quantized", parameters: [
+                "search": "quantized",
+                "pipeline_tag": "text-generation",
+                "full": "1"
+            ]),
+            // Recently updated models
+            .init(label: "recently-updated", parameters: [
+                "sort": "lastModified",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
                 "full": "1"
@@ -305,7 +362,9 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
         var seenModelIDs: Set<String> = []
 
         for query in queries {
+            NSLog("HuggingFace: Starting query '\(query.label)' - current total: \(results.count) models")
             var skip = 0
+            var pageNumber = 0
 
             while results.count < limit {
                 let remaining = limit - results.count
@@ -338,7 +397,10 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 }
 
                 let models = try decoder.decode([HuggingFaceModel].self, from: data)
+                pageNumber += 1
+                
                 if models.isEmpty {
+                    NSLog("HuggingFace: Query '\(query.label)' page \(pageNumber) returned no models, ending pagination")
                     break
                 }
 
@@ -376,19 +438,26 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 }
 
                 let addedAny = results.count > startCount
+                let addedCount = results.count - startCount
+                
+                NSLog("HuggingFace: Query '\(query.label)' page \(pageNumber) processed \(models.count) models, added \(addedCount) new models (total: \(results.count))")
 
                 if results.count >= limit {
+                    NSLog("HuggingFace: Reached limit of \(limit) models, stopping")
                     break
                 }
 
                 skip += models.count
                 if models.count < pageSize || !addedAny {
+                    NSLog("HuggingFace: Query '\(query.label)' exhausted (returned \(models.count) < \(pageSize) or no new models added)")
                     break
                 }
 
                 // Be courteous to Hugging Face if we need additional pages.
                 try await Task.sleep(nanoseconds: 150_000_000)
             }
+
+            NSLog("HuggingFace: Finished query '\(query.label)' with \(results.count) total models")
 
             if results.count >= limit {
                 break
@@ -421,11 +490,18 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
 
         if list.data.isEmpty { return [] }
 
+        NSLog("Ollama: Found \(list.data.count) models in registry, processing up to \(min(limit, list.data.count))...")
+        
         var results: [ModelMetadata] = []
-        for entry in list.data.prefix(limit) {
+        let modelsToProcess = limit == Int.max ? list.data : Array(list.data.prefix(limit))
+        
+        for (index, entry) in modelsToProcess.enumerated() {
             do {
                 if let metadata = try await makeOllamaMetadata(for: entry.id) {
                     results.append(metadata)
+                    if (index + 1) % 10 == 0 {
+                        NSLog("Ollama: Processed \(index + 1)/\(modelsToProcess.count) models, \(results.count) successfully added")
+                    }
                 }
             } catch let error as RemoteCatalogError {
                 NSLog("Ollama catalog entry \(entry.id) failed: \(error.localizedDescription)")
@@ -434,6 +510,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
             }
         }
 
+        NSLog("Ollama: Finished processing, successfully added \(results.count) models")
         return results
     }
 
