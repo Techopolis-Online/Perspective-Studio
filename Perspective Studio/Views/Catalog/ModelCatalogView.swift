@@ -13,9 +13,11 @@ import AppKit
 struct ModelCatalogView: View {
     @StateObject private var viewModel: CatalogViewModel
     @EnvironmentObject private var appViewModel: AppViewModel
+    @State private var selectedModel: ModelMetadata?
+    @FocusState private var focusedModelID: ModelMetadata.ID?
 
     private let gridColumns = [
-        GridItem(.adaptive(minimum: 260, maximum: 320), spacing: 20)
+        GridItem(.flexible(), spacing: 12)
     ]
 
     init(viewModel: CatalogViewModel) {
@@ -29,13 +31,14 @@ struct ModelCatalogView: View {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: 20) {
                     ForEach(viewModel.filteredModels) { model in
-                        ModelCatalogCard(
+                        CatalogRow(
                             model: model,
-                            systemInfo: appViewModel.systemInfo,
                             isPreferred: appViewModel.userSettings.preferredModelID == model.id,
-                            onDownload: { viewModel.startDownload(model) },
-                            onSetPreferred: { viewModel.selectPreferred(model: model) }
+                            isFocused: focusedModelID == model.id,
+                            onActivate: { presentDetails(for: model) }
                         )
+                        .focusable(true)
+                        .focused($focusedModelID, equals: model.id)
                     }
                 }
                 .padding(.bottom, 12)
@@ -52,6 +55,30 @@ struct ModelCatalogView: View {
                 .disabled(true)
             }
         }
+        .sheet(item: $selectedModel) { model in
+            ModelDetailView(
+                model: model,
+                systemInfo: appViewModel.systemInfo,
+                isPreferred: appViewModel.userSettings.preferredModelID == model.id,
+                onDownload: { viewModel.startDownload(model) },
+                onSetPreferred: { viewModel.selectPreferred(model: model) },
+                onOpenSource: {
+#if os(macOS)
+                    if let url = model.sourceURL {
+                        NSWorkspace.shared.open(url)
+                    }
+#endif
+                },
+                onClose: {
+                    selectedModel = nil
+                }
+            )
+            .environmentObject(appViewModel)
+        }
+    }
+
+    private func presentDetails(for model: ModelMetadata) {
+        selectedModel = model
     }
 
     private var header: some View {
@@ -164,131 +191,32 @@ struct ModelCatalogView: View {
     }
 }
 
-private struct ModelCatalogCard: View {
+private struct CatalogRow: View {
     let model: ModelMetadata
-    let systemInfo: SystemInfo
     let isPreferred: Bool
-    let onDownload: () -> Void
-    let onSetPreferred: () -> Void
-
-    private var compatibilityStatus: ModelCompatibilityStatus {
-        model.compatibility(for: systemInfo)
-    }
+    let isFocused: Bool
+    let onActivate: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: [Color.accentColor.opacity(0.25), Color.accentColor.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ))
-                    .frame(height: 140)
-
-                Image(systemName: model.thumbnailSymbolName)
-                    .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-                    .symbolRenderingMode(.hierarchical)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(model.name)
-                        .font(.headline)
-                    Spacer()
-                    if isPreferred {
-                        Label("Preferred", systemImage: "star.fill")
-                            .labelStyle(.iconOnly)
-                            .foregroundStyle(.yellow)
-                            .accessibilityLabel("Preferred model")
-                    }
-                }
-
-                Text(model.version)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Label(model.host.displayName, systemImage: model.host.iconSystemName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 8) {
-                Label(compatibilityStatus.message, systemImage: compatibilityStatus.iconSystemName)
-                    .font(.subheadline)
-                    .padding(8)
-                    .background(
-                        Capsule()
-                            .fill(compatibilityStatus == .compatible ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                    )
-                    .foregroundStyle(compatibilityStatus == .compatible ? Color.green : Color.orange)
-
-                Spacer()
-
-                Text(model.memorySummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            HStack(spacing: 6) {
-                TagChip(text: model.quantized.rawValue.uppercased())
-                TagChip(text: model.formattedSize)
-                ForEach(model.tags.prefix(3), id: \.self) { tag in
-                    TagChip(text: tag)
-                }
-            }
-
-            HStack(spacing: 12) {
-                Button("Download") {
-                    onDownload()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-
-                Button(isPreferred ? "Preferred" : "Set Preferred") {
-                    onSetPreferred()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(isPreferred)
-            }
-
-            if let sourceURL = model.sourceURL {
-                Button {
-#if os(macOS)
-                    NSWorkspace.shared.open(sourceURL)
-#endif
-                } label: {
-                    Label("Open on \(model.host.displayName)", systemImage: model.host.iconSystemName)
-                }
-                .buttonStyle(.link)
-            }
+        Button(action: onActivate) {
+            Text(model.name)
+                .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 18)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(isFocused ? Color.accentColor.opacity(0.18) : Color.clear)
+                )
         }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(Color(NSColor.windowBackgroundColor))
-                .shadow(color: .black.opacity(0.08), radius: 12, x: 0, y: 6)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(model.name). \(compatibilityStatus.message). \(model.memorySummary).")
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityHint("Opens detailed information for \(model.name)")
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        isPreferred ? "\(model.name), preferred model" : model.name
     }
 }
 
-private struct TagChip: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.caption)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(
-                Capsule()
-                    .fill(Color.accentColor.opacity(0.12))
-            )
-            .foregroundStyle(.primary)
-    }
-}
