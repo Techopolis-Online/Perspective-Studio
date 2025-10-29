@@ -11,7 +11,7 @@
 
 *Bringing the power of local LLMs to everyone, with accessibility at the core.*
 
-[Getting Started](#getting-started) • [Features](#features) • [Contributing](#contributing) • [Roadmap](#roadmap)
+[Getting Started](#getting-started) - [Features](#features) - [Contributing](#contributing) - [Roadmap](#roadmap)
 
 </div>
 
