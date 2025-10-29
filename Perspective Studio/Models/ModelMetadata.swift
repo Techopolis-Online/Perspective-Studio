@@ -128,8 +128,8 @@ enum ModelCompatibilityStatus: String, Codable {
 
     var message: String {
         switch self {
-        case .compatible: return "Runs great on your device"
-        case .needsMoreMemory: return "May need more RAM"
+        case .compatible: return "Works on your device"
+        case .needsMoreMemory: return "Needs more memory"
         }
     }
 

@@ -61,9 +61,13 @@ final class DownloadManager: NSObject, DownloadManaging {
     }
 
     func enqueueDownload(_ model: ModelMetadata) {
+        NSLog("📥 Enqueuing download for model: \(model.name) (\(model.id))")
+        NSLog("📥 Download URL: \(model.downloadURL.absoluteString)")
+        
         // Avoid enqueuing duplicates of the same model that are already active.
         if let existing = downloads.first(where: { $0.model.id == model.id && !$0.state.isActive && $0.state != .failed(error: .cancelled) }) {
             // If previously completed, remove to re-download.
+            NSLog("📥 Removing existing download for re-download")
             removeDownload(existing.id)
         }
 
@@ -76,7 +80,8 @@ final class DownloadManager: NSObject, DownloadManaging {
         let record = DownloadRecord(download: download)
         records[download.id] = record
         downloads.append(download)
-
+        
+        NSLog("📥 Download queued successfully, starting task...")
         startTask(for: download.id, with: model.downloadURL, resumeData: nil)
     }
 
@@ -113,17 +118,26 @@ final class DownloadManager: NSObject, DownloadManaging {
     // MARK: - Internal helpers
 
     private func startTask(for id: UUID, with url: URL, resumeData: Data?) {
+        NSLog("📥 Starting task for download ID: \(id)")
+        NSLog("📥 URL: \(url.absoluteString)")
+        
         var record = records[id]
-        guard record != nil else { return }
+        guard record != nil else {
+            NSLog("⚠️ No record found for download ID: \(id)")
+            return
+        }
 
         let task: URLSessionDownloadTask
         if let resumeData {
+            NSLog("📥 Resuming with resume data")
             task = session.downloadTask(withResumeData: resumeData)
         } else {
+            NSLog("📥 Creating new download request")
             var request = URLRequest(url: url)
             request.timeoutInterval = 60 * 5
             request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
             if isHuggingFace(url: url), let token = NetworkEnvironment.huggingFaceToken {
+                NSLog("📥 Adding HuggingFace authorization token")
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
             task = session.downloadTask(with: request)
@@ -143,7 +157,9 @@ final class DownloadManager: NSObject, DownloadManaging {
                 replaceDownload(download)
                 records[id]?.download = download
             }
+            NSLog("📥 Resuming download task...")
             task.resume()
+            NSLog("📥 Download task resumed successfully")
         }
     }
 
@@ -317,7 +333,15 @@ extension DownloadManager: URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let (id, _) = lookupRecord(for: task) else { return }
+        
+        if let error = error {
+            NSLog("❌ Download task completed with error for ID \(id): \(error.localizedDescription)")
+        } else {
+            NSLog("✅ Download task completed successfully for ID \(id)")
+        }
+        
         if let urlError = error as? URLError {
+            NSLog("❌ URLError code: \(urlError.code.rawValue)")
             if urlError.code == .cancelled {
                 // Cancel handled separately; no additional state update necessary.
                 return
@@ -325,7 +349,7 @@ extension DownloadManager: URLSessionDownloadDelegate {
             if urlError.code == .badServerResponse,
                let response = task.response as? HTTPURLResponse {
                 let mappedError = mapHTTPStatus(response.statusCode, url: response.url)
-                NSLog("Download failed for \(response.url?.absoluteString ?? "<unknown>"): HTTP \(response.statusCode)")
+                NSLog("❌ Download failed for \(response.url?.absoluteString ?? "<unknown>"): HTTP \(response.statusCode)")
                 Task { @MainActor in
                     self.handleFailure(id: id, error: mappedError)
                 }

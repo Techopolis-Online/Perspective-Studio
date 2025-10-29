@@ -33,6 +33,7 @@ struct ModelCatalogView: View {
                     ForEach(viewModel.filteredModels) { model in
                         CatalogRow(
                             model: model,
+                            systemInfo: appViewModel.systemInfo,
                             isPreferred: appViewModel.userSettings.preferredModelID == model.id,
                             isFocused: focusedModelID == model.id,
                             onActivate: { presentDetails(for: model) }
@@ -194,6 +195,7 @@ struct ModelCatalogView: View {
 
 private struct CatalogRow: View {
     let model: ModelMetadata
+    let systemInfo: SystemInfo
     let isPreferred: Bool
     let isFocused: Bool
     let onActivate: () -> Void
@@ -216,6 +218,10 @@ private struct CatalogRow: View {
                 Text(model.formattedSize)
                     .font(.caption)
                     .foregroundColor(.secondary)
+                Label(compatibilityStatus.message, systemImage: compatibilityStatus.iconSystemName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(compatibilityStatus == .compatible ? Color.green : Color.orange)
+                    .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 14)
@@ -235,12 +241,16 @@ private struct CatalogRow: View {
         .accessibilityLabel(accessibilityLabel)
     }
 
+    private var compatibilityStatus: ModelCompatibilityStatus {
+        model.compatibility(for: systemInfo)
+    }
+
     private var accessibilityLabel: String {
         let sizeInfo = "\(model.formattedSize)"
+        let compatibilityMessage = compatibilityStatus.message
         if isPreferred {
-            return "\(model.name), \(sizeInfo), preferred model"
+            return "\(model.name), \(sizeInfo), preferred model, \(compatibilityMessage)"
         }
-        return "\(model.name), \(sizeInfo)"
+        return "\(model.name), \(sizeInfo), \(compatibilityMessage)"
     }
 }
-
