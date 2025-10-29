@@ -1,5 +1,24 @@
 # Perspective Studio - Recent Changes
 
+## Enhanced Model Catalog Fetching (Latest)
+
+The model catalog service now fetches significantly more models from HuggingFace and Ollama:
+
+- **Expanded HuggingFace Coverage**: Increased from 400 to 10,000 models
+- **Complete Ollama Registry**: Now fetches all available Ollama models (previously limited to 60)
+- **Additional Model Sources**: Added queries for popular providers:
+  - Bartowski (quantized models)
+  - Microsoft official models
+  - Meta Llama official models
+  - Mistral AI official models
+  - Google official models
+  - Recently updated models
+  - Quantized model search
+- **Enhanced Logging**: Detailed progress tracking during catalog refresh
+- **Maintained Security**: Continues to filter out gated and private models that require authentication tokens
+
+See `CATALOG_FETCHING.md` for technical details about the fetching process.
+
 ## Updates to Model Catalog and Detail Views
 
 ### Model Catalog Grid Improvements
