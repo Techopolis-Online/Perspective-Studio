@@ -270,26 +270,26 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Trending models
             .init(label: "trending", parameters: [
                 "sort": "trending",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // GGUF format filter (optimized for local inference)
             .init(label: "gguf-filter", parameters: [
                 "filter": "gguf",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Search for GGUF models
             .init(label: "search-gguf", parameters: [
                 "search": "GGUF",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Popular quantized model provider
             .init(label: "thebloke", parameters: [
@@ -297,7 +297,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // LM Studio curated models
             .init(label: "lmstudio", parameters: [
@@ -305,7 +305,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Popular model providers and formats
             .init(label: "bartowski", parameters: [
@@ -313,48 +313,48 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             .init(label: "microsoft", parameters: [
                 "author": "microsoft",
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             .init(label: "meta-llama", parameters: [
                 "author": "meta-llama",
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             .init(label: "mistralai", parameters: [
                 "author": "mistralai",
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             .init(label: "google", parameters: [
                 "author": "google",
                 "sort": "downloads",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Additional GGUF search
             .init(label: "search-quantized", parameters: [
                 "search": "quantized",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ]),
             // Recently updated models
             .init(label: "recently-updated", parameters: [
                 "sort": "lastModified",
                 "direction": "-1",
                 "pipeline_tag": "text-generation",
-                "full": "1"
+                "full": "true"
             ])
         ]
 
@@ -374,7 +374,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 parameters["limit"] = "\(pageSize)"
                 parameters["skip"] = "\(skip)"
                 if parameters["full"] == nil {
-                    parameters["full"] = "1"
+                    parameters["full"] = "true"
                 }
 
                 guard let url = Self.makeHuggingFaceURL(parameters: parameters) else {
@@ -405,12 +405,28 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 }
 
                 let startCount = results.count
+                var skippedDuplicate = 0
+                var skippedGated = 0
+                var skippedNoFiles = 0
+                var skippedNoDownload = 0
 
                 for model in models {
-                    guard seenModelIDs.insert(model.id).inserted else { continue }
-                    guard model.privateModel != true, model.gated != true else { continue }
-                    guard let file = model.primaryFileCandidate else { continue }
-                    guard let downloadURL = file.downloadURL(for: model.id), let size = file.sizeInBytes else { continue }
+                    guard seenModelIDs.insert(model.id).inserted else { 
+                        skippedDuplicate += 1
+                        continue 
+                    }
+                    guard model.privateModel != true, model.gated != true else { 
+                        skippedGated += 1
+                        continue 
+                    }
+                    guard let file = model.primaryFileCandidate else { 
+                        skippedNoFiles += 1
+                        continue 
+                    }
+                    guard let downloadURL = file.downloadURL(for: model.id), let size = file.sizeInBytes else { 
+                        skippedNoDownload += 1
+                        continue 
+                    }
 
                     let recommendedRam = Self.recommendedRam(forModelSize: size)
                     let metadata = ModelMetadata(
@@ -440,7 +456,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
                 let addedAny = results.count > startCount
                 let addedCount = results.count - startCount
                 
-                NSLog("HuggingFace: Query '\(query.label)' page \(pageNumber) processed \(models.count) models, added \(addedCount) new models (total: \(results.count))")
+                NSLog("HuggingFace: Query '\(query.label)' page \(pageNumber) processed \(models.count) models, added \(addedCount) new models (total: \(results.count)). Skipped: \(skippedDuplicate) duplicates, \(skippedGated) gated/private, \(skippedNoFiles) no files, \(skippedNoDownload) no download URL")
 
                 if results.count >= limit {
                     NSLog("HuggingFace: Reached limit of \(limit) models, stopping")
@@ -672,17 +688,49 @@ private struct HuggingFaceModel: Decodable {
     }
 
     var primaryFileCandidate: HuggingFaceSibling? {
+        // Preferred extensions for on-device inference (in order of preference)
         let preferredExtensions = [
             ".gguf",
             ".ggml",
             ".safetensors",
             ".bin",
             ".pt",
-            ".onnx"
+            ".onnx",
+            ".pth",
+            ".h5",
+            ".pb",
+            ".tflite",
+            ".mlmodel"
         ]
-        guard let siblings else { return nil }
-
-        if let match = siblings
+        
+        // Excluded patterns for files we don't want (config, tokenizer, etc.)
+        let excludedPatterns = [
+            "config.json",
+            "tokenizer",
+            "vocab",
+            ".txt",
+            ".md",
+            ".json",
+            "README"
+        ]
+        
+        guard let siblings, !siblings.isEmpty else { return nil }
+        
+        // Filter out files we definitely don't want
+        let validSiblings = siblings.filter { sibling in
+            guard let filename = sibling.rfilename?.lowercased() else { return false }
+            // Exclude config/tokenizer/text files
+            for pattern in excludedPatterns {
+                if filename.contains(pattern.lowercased()) {
+                    return false
+                }
+            }
+            // Must have some size information
+            return sibling.sizeInBytes != nil && sibling.sizeInBytes! > 0
+        }
+        
+        // First, try to find a file with preferred extension
+        if let match = validSiblings
             .filter({ sibling in
                 guard let filename = sibling.rfilename?.lowercased() else { return false }
                 return preferredExtensions.contains(where: { filename.hasSuffix($0) })
@@ -691,8 +739,10 @@ private struct HuggingFaceModel: Decodable {
             .first {
             return match
         }
-        return siblings
-            .sorted(by: { ($0.sizeInBytes ?? Int64.max) < ($1.sizeInBytes ?? Int64.max) })
+        
+        // If no preferred extension found, return any valid file (largest one, likely the model weights)
+        return validSiblings
+            .sorted(by: { ($0.sizeInBytes ?? 0) > ($1.sizeInBytes ?? 0) })
             .first
     }
 
