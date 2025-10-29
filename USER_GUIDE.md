@@ -91,7 +91,7 @@ A: The catalog metadata (model names, sizes, descriptions) uses minimal storage 
 ### Q: Can I reduce the fetch time?
 A: Yes! In `ModelCatalogService.swift`, you can adjust:
 ```swift
-let huggingFaceModels = try await fetchHuggingFaceModels(limit: 1000) // Lower number
+let huggingFaceModels = try await fetchHuggingFaceModels(limit: 1000) // Reduce from 10_000
 ```
 This will fetch fewer models but complete faster.
 
