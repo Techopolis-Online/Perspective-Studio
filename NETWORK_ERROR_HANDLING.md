@@ -82,8 +82,21 @@ The app includes App Transport Security (ATS) settings for secure connections:
 - No insecure HTTP loads allowed
 
 ### Required Entitlements
-- Network client access (outgoing connections)
-- Background downloads (for large model files)
+The app requires the following entitlements in `Perspective_Studio.entitlements`:
+
+#### Network Access
+- **`com.apple.security.network.client`**: Allows outgoing network connections for catalog refresh and model downloads
+
+#### Background Downloads
+- **`com.apple.application-identifier`**: Required for background URLSession to download large model files
+  - Format: `$(AppIdentifierPrefix)com.techopolisonline.Perspective-Studio`
+  - Enables downloads to continue when app is in background
+
+#### iCloud Services (Existing)
+- **`com.apple.developer.icloud-services`**: CloudKit for syncing metadata
+- **`com.apple.developer.aps-environment`**: Push notifications support
+
+**Note on Sandbox Warnings**: You may see warnings like "Sandbox is preventing this process from reading networkd settings file" in debug console. This is expected behavior in sandboxed apps and does not affect network functionality. The networkd settings warning is informational and can be safely ignored.
 
 ## Testing Network Error Handling
 
