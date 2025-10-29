@@ -56,6 +56,7 @@ final class AppViewModel: ObservableObject {
 
         restorePersistedState()
         observeDownloads()
+        refreshCatalog()
     }
 
     func completeOnboarding() {

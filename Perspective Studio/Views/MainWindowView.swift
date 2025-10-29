@@ -54,10 +54,6 @@ struct MainWindowView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationDestination(for: SidebarDestination.self) { destination in
-            destinationView(for: destination)
-        }
-        .navigationTitle(appViewModel.selectedDestination?.title ?? "Perspective Studio")
         .frame(minWidth: 980, minHeight: 640)
     }
 
@@ -72,12 +68,16 @@ struct MainWindowView: View {
         switch destination {
         case .chats:
             ChatContainerView()
+                .navigationTitle(destination.title)
         case .catalog:
             ModelCatalogView(viewModel: CatalogViewModel(appViewModel: appViewModel))
+                .navigationTitle(destination.title)
         case .downloads:
             DownloadManagerView()
+                .navigationTitle(destination.title)
         case .settings:
             SettingsView()
+                .navigationTitle(destination.title)
         }
     }
 }
