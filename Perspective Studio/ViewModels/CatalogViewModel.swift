@@ -16,6 +16,8 @@ final class CatalogViewModel: ObservableObject {
     @Published var selectedHost: ModelMetadata.HostProvider?
     @Published var compatibilityFilter: CompatibilityFilter = .all
     @Published var models: [ModelMetadata]
+    @Published var isRefreshing: Bool = false
+    @Published var lastError: NetworkError?
 
     private let catalogService: ModelCatalogServiceProtocol
     private let appViewModel: AppViewModel
@@ -63,7 +65,35 @@ final class CatalogViewModel: ObservableObject {
     }
 
     func refresh() {
-        appViewModel.refreshCatalog()
+        isRefreshing = true
+        lastError = nil
+        
+        Task {
+            do {
+                let catalog = try await catalogService.refreshCatalog()
+                await MainActor.run {
+                    models = catalog
+                    isRefreshing = false
+                    VoiceOverAnnouncer.announce("Catalog refreshed with \(catalog.count) models.")
+                }
+            } catch let error as NetworkError {
+                await MainActor.run {
+                    lastError = error
+                    isRefreshing = false
+                    VoiceOverAnnouncer.announce("Catalog refresh failed: \(error.errorDescription ?? "Unknown error")")
+                }
+            } catch {
+                await MainActor.run {
+                    lastError = NetworkError.from(error)
+                    isRefreshing = false
+                    VoiceOverAnnouncer.announce("Catalog refresh failed.")
+                }
+            }
+        }
+    }
+    
+    func dismissError() {
+        lastError = nil
     }
 
     func startDownload(_ model: ModelMetadata) {

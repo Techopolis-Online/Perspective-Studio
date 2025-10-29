@@ -1,4 +1,3 @@
-//
 //  ModelCatalogService.swift
 //  Perspective Studio
 //
@@ -10,7 +9,7 @@ import Foundation
 
 protocol ModelCatalogServiceProtocol {
     func loadInitialCatalog() -> [ModelMetadata]
-    func refreshCatalog() async -> [ModelMetadata]
+    func refreshCatalog() async throws -> [ModelMetadata]
     func importModel(from url: URL) async throws -> ModelMetadata
 }
 
@@ -74,7 +73,7 @@ final class ModelCatalogService: ModelCatalogServiceProtocol {
         return ModelMetadata.placeholderCatalog
     }
 
-    func refreshCatalog() async -> [ModelMetadata] {
+    func refreshCatalog() async throws -> [ModelMetadata] {
         do {
             var aggregated: [ModelMetadata] = []
             async let huggingFace = fetchHuggingFaceModels(limit: 60)
@@ -328,7 +327,7 @@ private struct HuggingFaceSibling: Decodable {
         init(from decoder: Decoder) throws {
             if let container = try? decoder.container(keyedBy: CodingKeys.self) {
                 oid = try container.decodeIfPresent(String.self, forKey: .oid)
-                size = container.decodeLossyInt64IfPresent(forKey: .size)
+                size = try container.decodeLossyInt64IfPresent(forKey: .size)
                 return
             }
 

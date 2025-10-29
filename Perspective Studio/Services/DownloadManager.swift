@@ -1,4 +1,3 @@
-//
 //  DownloadManager.swift
 //  Perspective Studio
 //
@@ -54,6 +53,7 @@ final class DownloadManager: NSObject, DownloadManaging {
 
     private override init() {
         super.init()
+        // session already created with delegate=self in the lazy initializer.
     }
 
     var downloadsPublisher: AnyPublisher<[ModelDownload], Never> {
@@ -61,9 +61,8 @@ final class DownloadManager: NSObject, DownloadManaging {
     }
 
     func enqueueDownload(_ model: ModelMetadata) {
-        // Avoid enqueuing duplicates of the same model that are already active.
-        if let existing = downloads.first(where: { $0.model.id == model.id && !$0.state.isActive && $0.state != .failed(error: .cancelled) }) {
-            // If previously completed, remove to re-download.
+        // Remove any previous entry for this model to avoid duplicates.
+        if let existing = downloads.first(where: { $0.model.id == model.id }) {
             removeDownload(existing.id)
         }
 
@@ -75,7 +74,7 @@ final class DownloadManager: NSObject, DownloadManaging {
         )
         let record = DownloadRecord(download: download)
         records[download.id] = record
-        downloads.append(download)
+        replaceDownload(download)
 
         startTask(for: download.id, with: model.downloadURL, resumeData: nil)
     }
@@ -177,6 +176,7 @@ final class DownloadManager: NSObject, DownloadManaging {
                     try fileManager.removeItem(at: destination)
                 }
 
+                // Verify checksum if provided
                 if !model.sha256.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     let checksum = try computeSHA256(for: tempURL)
                     guard checksum.caseInsensitiveCompare(model.sha256) == .orderedSame else {
@@ -251,7 +251,9 @@ final class DownloadManager: NSObject, DownloadManaging {
     }
 
     private func lookupRecord(for task: URLSessionTask) -> (UUID, DownloadRecord)? {
-        guard let idString = task.taskDescription, let uuid = UUID(uuidString: idString), let record = records[uuid] else {
+        guard let idString = task.taskDescription,
+              let uuid = UUID(uuidString: idString),
+              let record = records[uuid] else {
             return nil
         }
         return (uuid, record)
@@ -282,15 +284,14 @@ final class DownloadManager: NSObject, DownloadManaging {
 // MARK: - URLSessionDownloadDelegate
 
 extension DownloadManager: URLSessionDownloadDelegate {
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+    func urlSession(_ session: URLSession,
+                    downloadTask: URLSessionDownloadTask,
+                    didWriteData bytesWritten: Int64,
+                    totalBytesWritten: Int64,
+                    totalBytesExpectedToWrite: Int64) {
         guard var (id, record) = lookupRecord(for: downloadTask) else { return }
         let expected = totalBytesExpectedToWrite
-        let progress: Double
-        if expected > 0 {
-            progress = Double(totalBytesWritten) / Double(expected)
-        } else {
-            progress = 0
-        }
+        let progress: Double = expected > 0 ? Double(totalBytesWritten) / Double(expected) : 0
 
         let now = Date()
         let timeDelta = now.timeIntervalSince(record.lastUpdate)
@@ -309,17 +310,21 @@ extension DownloadManager: URLSessionDownloadDelegate {
         replaceDownload(record.download)
     }
 
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard let (id, record) = lookupRecord(for: downloadTask) else { return }
+    func urlSession(_ session: URLSession,
+                    downloadTask: URLSessionDownloadTask,
+                    didFinishDownloadingTo location: URL) {
+        guard let (id, _) = lookupRecord(for: downloadTask) else { return }
         records[id]?.task = nil
         finalizeDownload(id: id, tempURL: location)
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+    func urlSession(_ session: URLSession,
+                    task: URLSessionTask,
+                    didCompleteWithError error: Error?) {
         guard let (id, _) = lookupRecord(for: task) else { return }
         if let urlError = error as? URLError {
             if urlError.code == .cancelled {
-                // Cancel handled separately; no additional state update necessary.
+                // Cancel handled separately.
                 return
             }
             if urlError.code == .badServerResponse,
