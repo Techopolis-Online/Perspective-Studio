@@ -81,9 +81,15 @@ final class AppViewModel: ObservableObject {
 
     func refreshCatalog() {
         Task {
-            let entries = await catalogService.refreshCatalog()
-            await MainActor.run {
-                catalog = entries
+            do {
+                let entries = try await catalogService.refreshCatalog()
+                await MainActor.run {
+                    catalog = entries
+                }
+            } catch {
+                NSLog("Failed to refresh catalog: \(error.localizedDescription)")
+                // Keep existing catalog on error
+                // Could also show an alert to the user here
             }
         }
     }
