@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Perspective Studio</title>
+    <style>
+      :root { --bg:#f7f7fb; --card:#fff; --text:#1a1a1a; --muted:#666; --border:#e6e6ef; --primary:#4f46e5; --primary-fg:#fff; }
+      html, body { height:100%; }
+      body { margin:0; background:var(--bg); color:var(--text); }
+      button { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:8px 10px; cursor:pointer; }
+      button:hover { border-color:#c8c8d8; }
+      input, textarea, select { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:8px 10px; }
+      code { background:#eef; padding:2px 6px; border-radius:6px; }
+      .btn-primary { background:var(--primary); color:var(--primary-fg); border-color:var(--primary); }
+      .btn-primary:hover { filter:brightness(0.95); }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+  </html>
+
+
+

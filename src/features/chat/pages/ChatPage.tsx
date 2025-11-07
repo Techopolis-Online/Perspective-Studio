@@ -1,0 +1,656 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { LlmMessage } from '../../../shared/types/llm';
+
+interface Conversation {
+  id: string;
+  title: string;
+  messages: LlmMessage[];
+  systemPrompt: string;
+  temperature: number;
+  model: string;
+  createdAt: number;
+}
+
+export default function ChatPage() {
+  const [models, setModels] = useState<string[]>([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConvId, setCurrentConvId] = useState<string | null>(null);
+  const [input, setInput] = useState<string>('');
+  const [showSettings, setShowSettings] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
+  const streamingRef = useRef(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const announceRef = useRef<HTMLDivElement>(null);
+  const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
+
+  const currentConv = conversations.find(c => c.id === currentConvId);
+
+  useEffect(() => {
+    (async () => {
+      const list = await window.api.ollama.listModels();
+      setModels(list);
+      const saved = localStorage.getItem('conversations');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          setConversations(parsed);
+          if (parsed.length > 0) {
+            setCurrentConvId(parsed[0].id);
+          }
+        } catch (e) {
+          console.error('Failed to load conversations:', e);
+        }
+      }
+      if (!saved || JSON.parse(saved).length === 0) {
+        createNewConversation(list[0] || '');
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (conversations.length > 0) {
+      localStorage.setItem('conversations', JSON.stringify(conversations));
+    }
+  }, [conversations]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentConv?.messages]);
+
+  useEffect(() => {
+    if (showDeleteModal) {
+      deleteModalCancelRef.current?.focus();
+    }
+  }, [showDeleteModal]);
+
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && showDeleteModal) {
+        setShowDeleteModal(false);
+        setConversationToDelete(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [showDeleteModal]);
+
+  function createNewConversation(modelName?: string) {
+    const newConv: Conversation = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [],
+      systemPrompt: 'You are a helpful assistant.',
+      temperature: 0.7,
+      model: modelName || models[0] || '',
+      createdAt: Date.now(),
+    };
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConvId(newConv.id);
+  }
+
+  function deleteConversation(id: string) {
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      if (currentConvId === id && filtered.length > 0) {
+        setCurrentConvId(filtered[0].id);
+      } else if (filtered.length === 0) {
+        createNewConversation();
+      }
+      return filtered;
+    });
+  }
+
+  function updateConversation(id: string, updates: Partial<Conversation>) {
+    setConversations(prev => 
+      prev.map(c => c.id === id ? { ...c, ...updates } : c)
+    );
+  }
+
+  async function generateTitle(messages: LlmMessage[]): Promise<string> {
+    if (messages.length === 0) return 'New Chat';
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    if (!firstUserMsg) return 'New Chat';
+    let title = firstUserMsg.content.trim().replace(/[?!.]+$/, '');
+    if (title.length <= 40) {
+      return title.charAt(0).toUpperCase() + title.slice(1);
+    }
+    const maxLength = 40;
+    if (title.length > maxLength) {
+      const truncated = title.substring(0, maxLength);
+      const lastSpace = truncated.lastIndexOf(' ');
+      if (lastSpace > 20) {
+        title = truncated.substring(0, lastSpace) + '...';
+      } else {
+        title = truncated + '...';
+      }
+    }
+    return title.charAt(0).toUpperCase() + title.slice(1);
+  }
+
+  async function pull(name: string) {
+    await window.api.ollama.pull(name, (s: string) => console.log('download:', s));
+    const list = await window.api.ollama.listModels();
+    setModels(list);
+  }
+
+  async function send() {
+    if (!currentConv || !input || streamingRef.current) return;
+    const userMessage = input.trim();
+    setInput('');
+    const updatedMessages: LlmMessage[] = [
+      ...currentConv.messages,
+      { role: 'user', content: userMessage },
+      { role: 'assistant', content: '' }
+    ];
+    updateConversation(currentConv.id, { messages: updatedMessages });
+    if (currentConv.messages.length === 0) {
+      const title = await generateTitle([{ role: 'user', content: userMessage }]);
+      updateConversation(currentConv.id, { title });
+    }
+    const msgs: LlmMessage[] = [];
+    if (currentConv.systemPrompt.trim()) {
+      msgs.push({ role: 'system', content: currentConv.systemPrompt.trim() });
+    }
+    for (const m of currentConv.messages) {
+      if (m.content) msgs.push(m);
+    }
+    msgs.push({ role: 'user', content: userMessage });
+    streamingRef.current = true;
+    let assistantResponse = '';
+    await window.api.ollama.chatStream(
+      { model: currentConv.model, messages: msgs, temperature: currentConv.temperature },
+      {
+        onToken: (chunk: string) => {
+          assistantResponse += chunk;
+          setConversations(prev =>
+            prev.map(c => {
+              if (c.id !== currentConv.id) return c;
+              const msgsCopy = c.messages.slice();
+              const last = msgsCopy[msgsCopy.length - 1];
+              if (last && last.role === 'assistant') {
+                last.content = assistantResponse;
+              }
+              return { ...c, messages: msgsCopy };
+            })
+          );
+        },
+        onCompleted: () => {
+          streamingRef.current = false;
+          if (announceRef.current) {
+            announceRef.current.textContent = `Assistant: ${assistantResponse}`;
+          }
+        },
+        onError: (error: string) => {
+          streamingRef.current = false;
+          setConversations(prev =>
+            prev.map(c => {
+              if (c.id !== currentConv.id) return c;
+              const msgsCopy = c.messages.slice();
+              const last = msgsCopy[msgsCopy.length - 1];
+              if (last && last.role === 'assistant') {
+                last.content = `Error: ${error}`;
+              }
+              return { ...c, messages: msgsCopy };
+            })
+          );
+          if (announceRef.current) {
+            announceRef.current.textContent = `Error: ${error}`;
+          }
+        },
+      }
+    );
+  }
+
+  const inputStyle = {
+    padding: '10px 14px',
+    borderRadius: 8,
+    border: '1px solid rgba(99, 102, 241, 0.3)',
+    background: 'rgba(15, 23, 42, 0.8)',
+    color: 'white',
+    fontSize: 14
+  };
+
+  const buttonStyle = {
+    padding: '10px 20px',
+    borderRadius: 8,
+    border: 'none',
+    background: '#8b5cf6',
+    color: 'white',
+    cursor: 'pointer',
+    fontWeight: 500,
+    transition: 'all 0.2s'
+  };
+
+  return (
+    <div style={{ display: 'flex', height: '100%', background: '#0f172a' }} aria-label="Chat">
+      <div style={{ 
+        width: 260, 
+        borderRight: '1px solid rgba(99, 102, 241, 0.3)', 
+        display: 'flex', 
+        flexDirection: 'column',
+        background: 'rgba(15, 23, 42, 0.8)'
+      }}>
+        <div style={{ padding: 16, borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
+          <button
+            onClick={() => createNewConversation()}
+            style={{
+              ...buttonStyle,
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = '#7c3aed';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = '#8b5cf6';
+            }}
+          >
+            <span style={{ fontSize: 18 }} aria-hidden="true">+</span> New Chat
+          </button>
+        </div>
+        
+        <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+          {conversations.map((conv) => (
+            <div
+              key={conv.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                borderLeft: conv.id === currentConvId ? '3px solid #8b5cf6' : '3px solid transparent',
+                background: conv.id === currentConvId ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                transition: 'all 0.2s',
+              }}
+            >
+              <button
+                onClick={() => setCurrentConvId(conv.id)}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'white',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ 
+                  fontSize: 14, 
+                  fontWeight: conv.id === currentConvId ? 600 : 400,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {conv.title} <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.5)', fontWeight: 400 }}>({conv.messages.length} messages)</span>
+                </div>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConversationToDelete(conv.id);
+                  setShowDeleteModal(true);
+                }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  fontSize: 16,
+                  flexShrink: 0,
+                }}
+                aria-label="Delete conversation"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {!currentConv ? (
+          <div style={{ 
+            flex: 1, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            color: 'rgba(255, 255, 255, 0.5)'
+          }}>
+            Select or create a conversation to start chatting
+          </div>
+        ) : (
+          <>
+            <div style={{ 
+              padding: '16px 24px', 
+              borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'rgba(15, 23, 42, 0.8)'
+            }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, color: 'white' }}>{currentConv.title}</h2>
+                <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginTop: 4 }}>
+                  Model: {currentConv.model}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSettings(!showSettings)}
+                style={{
+                  ...buttonStyle,
+                  padding: '8px 16px',
+                  fontSize: 13,
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = '#7c3aed';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = '#8b5cf6';
+                }}
+              >
+                ⚙️ Settings
+              </button>
+            </div>
+
+            {showSettings && (
+              <div style={{
+                padding: 16,
+                background: 'rgba(30, 41, 59, 0.8)',
+                borderBottom: '1px solid rgba(99, 102, 241, 0.3)',
+              }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 12, alignItems: 'center', maxWidth: 800 }}>
+                  <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 14 }}>Model:</label>
+                  <select 
+                    aria-label="Model" 
+                    value={currentConv.model} 
+                    onChange={(e) => updateConversation(currentConv.id, { model: e.target.value })}
+                    style={{ ...inputStyle, padding: '8px 12px' }}
+                  >
+                    {models.map((m) => (
+                      <option key={m} value={m} style={{ background: '#1e293b', color: 'white' }}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 14 }}>Temperature:</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <input
+                      aria-label="Temperature"
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.1}
+                      value={currentConv.temperature}
+                      onChange={(e) => updateConversation(currentConv.id, { temperature: Number(e.target.value) })}
+                      style={{ flex: 1 }}
+                    />
+                    <span style={{ color: 'white', fontSize: 14, minWidth: 30 }}>{currentConv.temperature.toFixed(1)}</span>
+                  </div>
+
+                  <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 14, alignSelf: 'start', paddingTop: 8 }}>System Prompt:</label>
+                  <textarea
+                    aria-label="System prompt"
+                    rows={3}
+                    value={currentConv.systemPrompt}
+                    onChange={(e) => updateConversation(currentConv.id, { systemPrompt: e.target.value })}
+                    style={{ ...inputStyle, resize: 'vertical' }}
+                    placeholder="System instructions for the AI..."
+                  />
+                </div>
+              </div>
+            )}
+
+            <div style={{ 
+              flex: 1, 
+              overflow: 'auto', 
+              padding: 24,
+              background: '#0f172a'
+            }}>
+              {currentConv.messages.length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  padding: 60, 
+                  color: 'rgba(255, 255, 255, 0.5)' 
+                }}>
+                  Start a conversation by typing a message below
+                </div>
+              ) : (
+                currentConv.messages.map((m, i) => (
+                  <div 
+                    key={i} 
+                    style={{ 
+                      marginBottom: 24,
+                      padding: '16px 20px',
+                      borderRadius: 12,
+                      background: m.role === 'user' 
+                        ? 'rgba(139, 92, 246, 0.1)' 
+                        : m.role === 'assistant'
+                        ? 'rgba(96, 165, 250, 0.1)'
+                        : 'rgba(148, 163, 184, 0.1)',
+                      border: '1px solid ' + (
+                        m.role === 'user' 
+                          ? 'rgba(139, 92, 246, 0.3)' 
+                          : m.role === 'assistant'
+                          ? 'rgba(96, 165, 250, 0.3)'
+                          : 'rgba(148, 163, 184, 0.3)'
+                      ),
+                    }}
+                  >
+                    <h3 style={{ 
+                      margin: '0 0 8px 0', 
+                      fontSize: 14, 
+                      fontWeight: 600,
+                      color: m.role === 'user' ? '#a78bfa' : m.role === 'assistant' ? '#60a5fa' : '#94a3b8',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px',
+                    }}>
+                      {m.role === 'user' ? 'User' : m.role === 'assistant' ? 'Assistant' : 'System'}
+                    </h3>
+                    <div style={{ 
+                      color: 'rgba(255, 255, 255, 0.9)', 
+                      lineHeight: 1.6,
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                    }}>
+                      {m.content || (m.role === 'assistant' && streamingRef.current ? '...' : '')}
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <div style={{ 
+              padding: 24, 
+              borderTop: '1px solid rgba(99, 102, 241, 0.3)',
+              background: 'rgba(15, 23, 42, 0.8)'
+            }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <input
+                  aria-label="Message"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !streamingRef.current) {
+                      e.preventDefault();
+                      send();
+                    }
+                  }}
+                  style={{ ...inputStyle, flex: 1, fontSize: 15 }}
+                  placeholder="Type your message..."
+                  disabled={streamingRef.current}
+                />
+                <button 
+                  onClick={send} 
+                  disabled={!currentConv.model || !input || streamingRef.current}
+                  style={{
+                    ...buttonStyle,
+                    padding: '12px 24px',
+                    opacity: (!currentConv.model || !input || streamingRef.current) ? 0.5 : 1,
+                    cursor: (!currentConv.model || !input || streamingRef.current) ? 'not-allowed' : 'pointer'
+                  }}
+                  onMouseOver={(e) => {
+                    if (currentConv.model && input && !streamingRef.current) {
+                      e.currentTarget.style.background = '#7c3aed';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    if (currentConv.model && input && !streamingRef.current) {
+                      e.currentTarget.style.background = '#8b5cf6';
+                    }
+                  }}
+                >
+                  {streamingRef.current ? 'Sending...' : 'Send'}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div 
+        ref={announceRef}
+        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+        role="status"
+        aria-live="assertive"
+        aria-atomic="true"
+      />
+
+      {showDeleteModal && conversationToDelete && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0, 0, 0, 0.7)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20,
+            }}
+            onClick={() => {
+              setShowDeleteModal(false);
+              setConversationToDelete(null);
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-description"
+          >
+            <div
+              style={{
+                background: '#1e293b',
+                borderRadius: 16,
+                maxWidth: 500,
+                width: '100%',
+                boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{
+                padding: '24px 24px 16px 24px',
+                borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
+                  <h2 id="delete-modal-title" style={{ color: 'white', fontSize: 24, margin: 0, flex: 1 }}>
+                    Delete Conversation
+                  </h2>
+                  <button
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setConversationToDelete(null);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'rgba(255, 255, 255, 0.7)',
+                      fontSize: 28,
+                      cursor: 'pointer',
+                      padding: '0 8px',
+                      lineHeight: 1,
+                    }}
+                    aria-label="Close modal"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
+                </div>
+              </div>
+
+              <div id="delete-modal-description" style={{ padding: 24 }}>
+                <p style={{ color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.6, margin: 0, marginBottom: 24 }}>
+                  Are you sure you want to delete this conversation? This action cannot be undone.
+                </p>
+                <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                  <button
+                    ref={deleteModalCancelRef}
+                    onClick={() => {
+                      setShowDeleteModal(false);
+                      setConversationToDelete(null);
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: 8,
+                      border: '1px solid rgba(99, 102, 241, 0.5)',
+                      background: 'transparent',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      deleteConversation(conversationToDelete);
+                      setShowDeleteModal(false);
+                      setConversationToDelete(null);
+                    }}
+                    style={{
+                      padding: '10px 20px',
+                      borderRadius: 8,
+                      border: 'none',
+                      background: '#dc2626',
+                      color: 'white',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = '#b91c1c';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.background = '#dc2626';
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
