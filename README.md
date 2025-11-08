@@ -22,6 +22,7 @@ Beginner-friendly, fully accessible local LLM desktop app inspired by LM Studio 
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
 - [Community & Updates](#community--updates)
+- [Donate](#donate)
 - [Reporting Issues](#reporting-issues)
 - [Contributing](#contributing)
 - [Security](#security)
@@ -148,6 +149,9 @@ Join our Discord to stay up to date, ask questions, and connect with the communi
 - Real-time repository activity in the `#community-commits` channel (new commits, PRs, releases)
 - Note: The `#community-commits` channel can be high traffic. Feel free to mute or customize notifications per channel.
 
+
+## Donate
+If you’d like to support the project, you can donate here: [Donate via Square](https://square.link/u/llukFoWd).
 
 ## Reporting Issues
 Please open issues here:  
