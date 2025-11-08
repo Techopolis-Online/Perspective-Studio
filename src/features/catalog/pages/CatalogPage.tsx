@@ -242,47 +242,56 @@ export default function CatalogPage() {
             const isInstalled = installedModels.includes(model.repo_id);
             const summary = `${model.repo_id}. ${desc} ${comp.text}${isInstalled ? ' · Downloaded' : ''}`.trim();
             return (
-              <button
+              <div
                 key={model.repo_id}
-                onClick={() => openModal(model)}
                 style={{
                   background: 'rgba(30, 41, 59, 0.8)',
                   border: '1px solid rgba(99, 102, 241, 0.3)',
                   borderRadius: 12,
                   padding: 20,
-                  cursor: 'pointer',
-                  textAlign: 'left',
                   transition: 'all 0.2s',
                   color: 'white',
                 }}
-                aria-label={summary}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.background = 'rgba(30, 41, 59, 1)';
-                  e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.5)';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  (e.currentTarget as HTMLDivElement).style.background = 'rgba(30, 41, 59, 1)';
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(139, 92, 246, 0.5)';
+                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)';
                 }}
                 onMouseOut={(e) => {
-                  e.currentTarget.style.background = 'rgba(30, 41, 59, 0.8)';
-                  e.currentTarget.style.borderColor = 'rgba(99, 102, 241, 0.3)';
-                  e.currentTarget.style.transform = 'translateY(0)';
+                  (e.currentTarget as HTMLDivElement).style.background = 'rgba(30, 41, 59, 0.8)';
+                  (e.currentTarget as HTMLDivElement).style.borderColor = 'rgba(99, 102, 241, 0.3)';
+                  (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)';
                 }}
               >
-                <span
-                  role="heading"
-                  aria-level={3}
-                  style={{ 
-                    color: 'white', 
-                    fontSize: 16, 
-                    fontWeight: 600, 
+                <h3
+                  style={{
                     margin: 0,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
+                    fontSize: 16,
+                    fontWeight: 600,
+                    color: 'white',
                   }}
                 >
-                  {summary}
-                </span>
-              </button>
+                  <button
+                    onClick={() => openModal(model)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      padding: 0,
+                      margin: 0,
+                      color: 'inherit',
+                      font: 'inherit',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                    }}
+                  >
+                    {summary}
+                  </button>
+                </h3>
+              </div>
             );
           })}
         </div>

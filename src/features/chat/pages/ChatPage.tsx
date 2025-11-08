@@ -752,10 +752,18 @@ export default function ChatPage() {
                 padding: '24px 24px 16px 24px',
                 borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <h2 id="delete-modal-title" style={{ color: 'white', fontSize: 24, margin: 0, flex: 1 }}>
-                    Delete Conversation
-                  </h2>
+                <h3
+                  id="delete-modal-title"
+                  style={{
+                    color: 'white',
+                    fontSize: 24,
+                    margin: 0,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'start',
+                  }}
+                >
+                  <span style={{ flex: 1 }}>Delete Conversation</span>
                   <button
                     onClick={() => {
                       setShowDeleteModal(false);
@@ -772,9 +780,9 @@ export default function ChatPage() {
                     }}
                     aria-label="Close modal"
                   >
-                  <span aria-hidden="true">×</span>
+                    ×
                   </button>
-                </div>
+                </h3>
               </div>
 
               <div id="delete-modal-description" style={{ padding: 24 }}>

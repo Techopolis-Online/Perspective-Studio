@@ -277,10 +277,18 @@ export default function SettingsPage() {
                 padding: '24px 24px 16px 24px',
                 borderBottom: '1px solid rgba(220, 38, 38, 0.3)',
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                  <h2 id="reset-modal-title" style={{ color: '#fca5a5', fontSize: 24, margin: 0, flex: 1 }}>
-                    ⚠️ Reset Everything
-                  </h2>
+                <h3
+                  id="reset-modal-title"
+                  style={{
+                    color: '#fca5a5',
+                    fontSize: 24,
+                    margin: 0,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'start',
+                  }}
+                >
+                  <span style={{ flex: 1 }}>⚠️ Reset Everything</span>
                   {!resetting && (
                     <button
                       onClick={() => setShowResetModal(false)}
@@ -295,10 +303,10 @@ export default function SettingsPage() {
                       }}
                       aria-label="Close modal"
                     >
-                      <span aria-hidden="true">×</span>
+                      ×
                     </button>
                   )}
-                </div>
+                </h3>
               </div>
 
               <div id="reset-modal-description" style={{ padding: 24 }}>

@@ -245,10 +245,18 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             padding: '24px 24px 16px 24px',
             borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-              <h2 id="modal-title" style={{ color: 'white', fontSize: 24, margin: 0, flex: 1 }}>
-                {model.repo_id}
-              </h2>
+            <h3
+              id="modal-title"
+              style={{
+                color: 'white',
+                fontSize: 24,
+                margin: 0,
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'start',
+              }}
+            >
+              <span style={{ flex: 1 }}>{model.repo_id}</span>
               {!downloading && (
                 <button
                   onClick={() => {
@@ -269,7 +277,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                   ×
                 </button>
               )}
-            </div>
+            </h3>
           </div>
 
           <div id="modal-description" style={{ padding: 24 }}>
@@ -504,10 +512,18 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             }}
           >
             <div style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                <h2 id="download-confirm-title" style={{ color: 'white', fontSize: 22, margin: 0, flex: 1 }}>
-                  Proceed with large download?
-                </h2>
+              <h3
+                id="download-confirm-title"
+                style={{
+                  color: 'white',
+                  fontSize: 22,
+                  margin: 0,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'start',
+                }}
+              >
+                <span style={{ flex: 1 }}>Proceed with large download?</span>
                 <button
                   onClick={() => {
                     setShowDownloadConfirm(false);
@@ -526,7 +542,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                 >
                   ×
                 </button>
-              </div>
+              </h3>
             </div>
             <div id="download-confirm-description" style={{ padding: 24 }}>
               <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.6, margin: 0, marginBottom: 16 }}>
