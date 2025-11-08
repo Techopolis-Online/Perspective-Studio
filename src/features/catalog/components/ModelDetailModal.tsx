@@ -36,6 +36,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const confirmOverlayRef = React.useRef<HTMLDivElement>(null);
   const confirmCancelRef = React.useRef<HTMLButtonElement>(null);
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
@@ -111,6 +112,8 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
     setDownloading(true);
     setDownloadStatus('Starting download...');
     setProgress(0);
+    // Ensure focus stays within the modal for screen readers when download begins
+    requestAnimationFrame(() => containerRef.current?.focus());
 
     try {
       await window.api.ollama.pull(model.repo_id, (status: string) => {
@@ -194,30 +197,35 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
 
   return (
     <>
-      <div
-        ref={overlayRef}
+      <dialog
+        ref={dialogRef}
+        open={isOpen}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
         aria-describedby="modal-description"
         onClick={(e) => {
-          if (e.target === overlayRef.current && !downloading) {
+          if (e.target === dialogRef.current && !downloading) {
             onClose();
             if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus());
           }
         }}
         style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
+          inset: 0,
           background: 'rgba(0, 0, 0, 0.7)',
           zIndex: 1000,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           padding: 20,
+          width: '100vw',
+          height: '100vh',
+          border: 'none',
+          margin: 0,
+          maxWidth: 'none',
+          maxHeight: 'none',
+          overflow: 'visible',
         }}
       >
         <div
@@ -241,6 +249,24 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             }
           }}
         >
+          {/* Persistent live region for screen reader announcements */}
+          <div
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            ref={liveRef}
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0, 0, 0, 0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+            }}
+          />
           <div style={{
             padding: '24px 24px 16px 24px',
             borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
@@ -368,13 +394,6 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                   />
                 </div>
                 
-                <div 
-                  className="sr-only"
-                  role="status"
-                  ref={liveRef}
-                >
-                  Download progress: {progress}%
-                </div>
               </div>
             )}
 
@@ -417,30 +436,28 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                 {downloading ? 'Downloading...' : isInstalled ? 'Installed' : ((compatibility.ok || mode === 'power') ? 'Download Model' : 'Not Compatible')}
               </button>
               
-              {!downloading && (
-                <button
-                  onClick={() => { onClose(); if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus()); }}
-                  style={{
-                    padding: '12px 24px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(99, 102, 241, 0.3)',
-                    background: 'transparent',
-                    color: 'rgba(255, 255, 255, 0.9)',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    fontSize: 16,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
+              <button
+                onClick={() => { onClose(); if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus()); }}
+                style={{
+                  padding: '12px 24px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                  background: 'transparent',
+                  color: 'rgba(255, 255, 255, 0.9)',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                  fontSize: 16,
+                  transition: 'all 0.2s',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                }}
+              >
+                Cancel
+              </button>
               
               {isInstalled && !downloading && (
                 <button
@@ -471,141 +488,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             </div>
           </div>
         </div>
-      </div>
-      
-      {showDownloadConfirm && (
-        <div
-          ref={confirmOverlayRef}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="download-confirm-title"
-          aria-describedby="download-confirm-description"
-          onClick={(e) => {
-            if (e.target === confirmOverlayRef.current) {
-              setShowDownloadConfirm(false);
-              // Return focus to the original download button
-              requestAnimationFrame(() => downloadBtnRef.current?.focus());
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: 'rgba(0, 0, 0, 0.7)',
-            zIndex: 1100,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            style={{
-              background: '#1e293b',
-              borderRadius: 16,
-              maxWidth: 520,
-              width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
-              border: '1px solid rgba(99, 102, 241, 0.3)',
-            }}
-          >
-            <div style={{ padding: '24px 24px 16px 24px', borderBottom: '1px solid rgba(99, 102, 241, 0.2)' }}>
-              <h3
-                id="download-confirm-title"
-                style={{
-                  color: 'white',
-                  fontSize: 22,
-                  margin: 0,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'start',
-                }}
-              >
-                <span style={{ flex: 1 }}>Proceed with large download?</span>
-                <button
-                  onClick={() => {
-                    setShowDownloadConfirm(false);
-                    requestAnimationFrame(() => downloadBtnRef.current?.focus());
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontSize: 28,
-                    cursor: 'pointer',
-                    padding: '0 8px',
-                    lineHeight: 1,
-                  }}
-                  aria-label="Close confirmation"
-                >
-                  ×
-                </button>
-              </h3>
-            </div>
-            <div id="download-confirm-description" style={{ padding: 24 }}>
-              <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.6, margin: 0, marginBottom: 16 }}>
-                This model may be too large for your device and could fail.
-              </p>
-              <p style={{ color: 'rgba(255, 255, 255, 0.8)', lineHeight: 1.6, margin: 0, marginBottom: 24 }}>
-                Download <span style={{ color: 'white', fontWeight: 600 }}>{model.repo_id}</span> anyway?
-              </p>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button
-                  ref={confirmCancelRef}
-                  onClick={() => {
-                    setShowDownloadConfirm(false);
-                    requestAnimationFrame(() => downloadBtnRef.current?.focus());
-                  }}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(99, 102, 241, 0.5)',
-                    background: 'transparent',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(99, 102, 241, 0.1)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={async () => {
-                    setShowDownloadConfirm(false);
-                    await startDownload();
-                  }}
-                  style={{
-                    padding: '10px 20px',
-                    borderRadius: 8,
-                    border: 'none',
-                    background: '#8b5cf6',
-                    color: 'white',
-                    cursor: 'pointer',
-                    fontWeight: 500,
-                    transition: 'all 0.2s',
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = '#7c3aed';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = '#8b5cf6';
-                  }}
-                >
-                  Download anyway
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      </dialog>
     </>
   );
 }
