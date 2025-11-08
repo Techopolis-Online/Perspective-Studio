@@ -17,6 +17,9 @@
     "dist": "npm run dist:build",
     "dist:build": "npm run build && electron-builder",
     "dist:dir": "npm run build && electron-builder --dir",
+    "dist:win:arm64": "npm run build && electron-builder --win --arm64",
+    "dist:win:x64": "npm run build && electron-builder --win --x64",
+    "dist:win:all": "npm run build && electron-builder --win --x64 --arm64",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.electron-preload.json --noEmit",
     "lint": "eslint \"{electron,src}/**/*.{ts,tsx}\"",
@@ -48,8 +51,18 @@
       ]
     },
     "win": {
-      "target": "nsis",
-      "artifactName": "${productName}-${version}-Setup.${ext}"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64", "arm64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-win-${arch}-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false
     }
   },
   "dependencies": {
