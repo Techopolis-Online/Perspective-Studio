@@ -143,11 +143,11 @@ function buildAppMenu(win: BrowserWindow) {
     submenu: [
       {
         label: 'Documentation',
-        click: () => shell.openExternal('https://github.com/taylorarndt/Perspective-Studio#readme'),
+        click: () => shell.openExternal('https://github.com/Techopolis-Online/Perspective-Studio#readme'),
       },
       {
         label: 'Report an Issue',
-        click: () => shell.openExternal('https://github.com/taylorarndt/Perspective-Studio/issues'),
+        click: () => shell.openExternal('https://github.com/Techopolis-Online/Perspective-Studio/issues'),
       },
     ],
   };
