@@ -145,7 +145,7 @@ A: Yes — install models via Ollama or supported backends and select them in th
 ## Community & Updates
 Join our Discord to stay up to date, ask questions, and connect with the community.
 
-- Invite: https://discord.com/invite/ugH9xwFd4N
+- Invite: [Discord Invite](https://discord.com/invite/ugH9xwFd4N)
 - Real-time repository activity in the `#community-commits` channel (new commits, PRs, releases)
 - Note: The `#community-commits` channel can be high traffic. Feel free to mute or customize notifications per channel.
 
@@ -154,8 +154,7 @@ Join our Discord to stay up to date, ask questions, and connect with the communi
 If you’d like to support the project, you can donate here: [Donate via Square](https://square.link/u/llukFoWd).
 
 ## Reporting Issues
-Please open issues here:  
-`https://github.com/Techopolis-Online/Perspective-Studio/issues`
+Please open issues here: [GitHub Issues](https://github.com/Techopolis-Online/Perspective-Studio/issues)
 
 
 ## Contributing
