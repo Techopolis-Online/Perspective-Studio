@@ -16,6 +16,7 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [input, setInput] = useState<string>('');
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
   const [isMentionOpen, setIsMentionOpen] = useState<boolean>(false);
   const [mentionQuery, setMentionQuery] = useState<string>('');
   const [activeMentionIndex, setActiveMentionIndex] = useState<number>(0);
@@ -27,12 +28,13 @@ export default function ChatPage() {
   const announceRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
+  const deleteOverlayRef = useRef<HTMLDivElement>(null);
 
   const currentConv = conversations.find(c => c.id === currentConvId);
 
   useEffect(() => {
     (async () => {
-      const list = await window.api.ollama.listModels();
+      const list = await (window as any).api.ollama.listModels();
       setModels(list);
       const saved = localStorage.getItem('conversations');
       if (saved) {
@@ -58,8 +60,8 @@ export default function ChatPage() {
       // Update File > Recent Chats in native menu (best-effort)
       try {
         const items = conversations.slice(0, 10).map(c => ({ id: c.id, title: c.title }));
-        if (window.api?.menu?.setRecentChats) {
-          window.api.menu.setRecentChats(items);
+        if ((window as any).api?.menu?.setRecentChats) {
+          (window as any).api.menu.setRecentChats(items);
         }
       } catch {}
     }
@@ -71,7 +73,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (showDeleteModal) {
-      deleteModalCancelRef.current?.focus();
+      requestAnimationFrame(() => deleteModalCancelRef.current?.focus());
     }
   }, [showDeleteModal]);
 
@@ -143,13 +145,13 @@ export default function ChatPage() {
   }
 
   async function pull(name: string) {
-    await window.api.ollama.pull(name, (s: string) => console.log('download:', s));
-    const list = await window.api.ollama.listModels();
+    await (window as any).api.ollama.pull(name, (s: string) => console.log('download:', s));
+    const list = await (window as any).api.ollama.listModels();
     setModels(list);
   }
 
   async function send() {
-    if (!currentConv || !input || streamingRef.current) return;
+    if (!currentConv || !input || isStreaming) return;
     const userMessage = input.trim();
     setInput('');
     const updatedMessages: LlmMessage[] = [
@@ -171,8 +173,9 @@ export default function ChatPage() {
     }
     msgs.push({ role: 'user', content: userMessage });
     streamingRef.current = true;
+    setIsStreaming(true);
     let assistantResponse = '';
-    await window.api.ollama.chatStream(
+    await (window as any).api.ollama.chatStream(
       { model: currentConv.model, messages: msgs, temperature: currentConv.temperature },
       {
         onToken: (chunk: string) => {
@@ -191,12 +194,17 @@ export default function ChatPage() {
         },
         onCompleted: () => {
           streamingRef.current = false;
+          setIsStreaming(false);
           if (announceRef.current) {
             announceRef.current.textContent = `Assistant: ${assistantResponse}`;
+          }
+          if (inputRef.current) {
+            requestAnimationFrame(() => inputRef.current && inputRef.current.focus());
           }
         },
         onError: (error: string) => {
           streamingRef.current = false;
+          setIsStreaming(false);
           setConversations(prev =>
             prev.map(c => {
               if (c.id !== currentConv.id) return c;
@@ -210,6 +218,9 @@ export default function ChatPage() {
           );
           if (announceRef.current) {
             announceRef.current.textContent = `Error: ${error}`;
+          }
+          if (inputRef.current) {
+            requestAnimationFrame(() => inputRef.current && inputRef.current.focus());
           }
         },
       }
@@ -402,7 +413,7 @@ export default function ChatPage() {
                 }}
                 aria-label="Delete conversation"
               >
-                <span aria-hidden="true">?</span>
+                Delete
               </button>
             </div>
           ))}
@@ -470,7 +481,7 @@ export default function ChatPage() {
                   e.currentTarget.style.background = '#8b5cf6';
                 }}
               >
-                ?? Settings
+                Settings
               </button>
             </div>
 
@@ -575,7 +586,7 @@ export default function ChatPage() {
                       whiteSpace: 'pre-wrap',
                       wordBreak: 'break-word',
                     }}>
-                      {m.content || (m.role === 'assistant' && streamingRef.current ? '...' : '')}
+                      {m.content || (m.role === 'assistant' && isStreaming ? '...' : '')}
                     </div>
                   </div>
                 ))
@@ -617,7 +628,7 @@ export default function ChatPage() {
                       setMentionQuery('');
                       setActiveMentionIndex(0);
                     }
-                    if (e.key === 'Enter' && !e.shiftKey && !streamingRef.current) {
+                    if (e.key === 'Enter' && !e.shiftKey && !isStreaming) {
                       e.preventDefault();
                       send();
                       return;
@@ -645,31 +656,31 @@ export default function ChatPage() {
                   }}
                   style={{ ...inputStyle, flex: 1, fontSize: 15 }}
                   placeholder="Type your message..."
-                  disabled={streamingRef.current}
+                  disabled={isStreaming}
                 />
                 <button 
                   onClick={send} 
-                  disabled={!currentConv.model || !input || streamingRef.current}
+                  disabled={!currentConv.model || !input || isStreaming}
                   style={{
                     ...buttonStyle,
                     padding: '12px 24px',
-                    opacity: (!currentConv.model || !input || streamingRef.current) ? 0.5 : 1,
-                    cursor: (!currentConv.model || !input || streamingRef.current) ? 'not-allowed' : 'pointer'
+                    opacity: (!currentConv.model || !input || isStreaming) ? 0.5 : 1,
+                    cursor: (!currentConv.model || !input || isStreaming) ? 'not-allowed' : 'pointer'
                   }}
                   aria-label="Send message"
                   title="Send (Enter)"
                   onMouseOver={(e) => {
-                    if (currentConv.model && input && !streamingRef.current) {
+                    if (currentConv.model && input && !isStreaming) {
                       e.currentTarget.style.background = '#7c3aed';
                     }
                   }}
                   onMouseOut={(e) => {
-                    if (currentConv.model && input && !streamingRef.current) {
+                    if (currentConv.model && input && !isStreaming) {
                       e.currentTarget.style.background = '#8b5cf6';
                     }
                   }}
                 >
-                  {streamingRef.current ? 'Sending...' : (
+                  {isStreaming ? 'Sending...' : (
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       <span>Send</span>
                       <span
@@ -695,15 +706,24 @@ export default function ChatPage() {
 
       <div 
         ref={announceRef}
-        style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px' }}
+        className="sr-only"
         role="status"
-        aria-live="assertive"
-        aria-atomic="true"
       />
 
       {showDeleteModal && conversationToDelete && (
         <>
           <div
+            ref={deleteOverlayRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-modal-title"
+            aria-describedby="delete-modal-description"
+            onClick={(e) => {
+              if (e.target === deleteOverlayRef.current) {
+                setShowDeleteModal(false);
+                setConversationToDelete(null);
+              }
+            }}
             style={{
               position: 'fixed',
               top: 0,
@@ -717,14 +737,6 @@ export default function ChatPage() {
               justifyContent: 'center',
               padding: 20,
             }}
-            onClick={() => {
-              setShowDeleteModal(false);
-              setConversationToDelete(null);
-            }}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-modal-title"
-            aria-describedby="delete-modal-description"
           >
             <div
               style={{
@@ -735,7 +747,6 @@ export default function ChatPage() {
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
                 border: '1px solid rgba(99, 102, 241, 0.3)',
               }}
-              onClick={(e) => e.stopPropagation()}
             >
               <div style={{
                 padding: '24px 24px 16px 24px',
@@ -761,7 +772,7 @@ export default function ChatPage() {
                     }}
                     aria-label="Close modal"
                   >
-                    <span aria-hidden="true">?</span>
+                  <span aria-hidden="true">×</span>
                   </button>
                 </div>
               </div>
@@ -846,7 +857,6 @@ export default function ChatPage() {
                       role="option"
                       aria-selected={idx === activeMentionIndex}
                       onMouseDown={(e) => {
-                        // prevent input from losing focus before we apply insertion
                         e.preventDefault();
                         applyMentionSelection(m);
                       }}

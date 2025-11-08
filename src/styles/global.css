@@ -1,0 +1,84 @@
+/* Global variables and base element styles moved from index.html */
+:root {
+	--bg: #f7f7fb;
+	--card: #fff;
+	--text: #1a1a1a;
+	--muted: #666;
+	--border: #e6e6ef;
+	--primary: #4f46e5;
+	--primary-fg: #fff;
+}
+
+html, body {
+	height: 100%;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+}
+
+button {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 8px 10px;
+	cursor: pointer;
+}
+
+button:hover {
+	border-color: #c8c8d8;
+}
+
+input,
+textarea,
+select {
+	background: var(--card);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	padding: 8px 10px;
+}
+
+code {
+	background: #eef;
+	padding: 2px 6px;
+	border-radius: 6px;
+}
+
+.btn-primary {
+	background: var(--primary);
+	color: var(--primary-fg);
+	border-color: var(--primary);
+}
+
+.btn-primary:hover {
+	filter: brightness(0.95);
+}
+
+/* App-specific utilities */
+dialog::backdrop {
+	background: rgba(0, 0, 0, 0.7);
+}
+
+@keyframes shimmer {
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(100%);
+	}
+}
+
+/* Visually hidden for a11y live regions, etc. */
+.sr-only {
+	position: absolute !important;
+	left: -9999px !important;
+	width: 1px !important;
+	height: 1px !important;
+	overflow: hidden !important;
+	clip: rect(0 0 0 0) !important;
+	white-space: nowrap !important;
+}
+
+

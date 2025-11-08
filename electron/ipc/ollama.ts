@@ -343,9 +343,24 @@ export function registerOllamaIpc(ipcMain: IpcMain, win: BrowserWindow | null) {
   ipcMain.handle('ollama:checkUpdate', async () => checkForUpdate());
   ipcMain.handle('ollama:catalog:search', async (_evt, { query, limit }: { query: string; limit?: number }) => searchOllamaCatalog(query, limit));
   ipcMain.handle('ollama:catalog:listTop', async (_evt, { limit }: { limit?: number }) => listTopOllamaCatalog(limit));
+  ipcMain.handle('ollama:deleteModel', async (_evt, { name }: { name: string }) => deleteModelByName(name));
   ipcMain.handle('ollama:deleteAllModels', async () => deleteAllModels(win));
   ipcMain.handle('ollama:uninstall', async () => uninstallOllama(win));
   ipcMain.handle('ollama:resetEverything', async () => resetEverything(win));
+}
+
+async function deleteModelByName(name: string): Promise<boolean> {
+  try {
+    const host = getSettings().ollamaHost.replace(/\/$/, '');
+    const resp = await fetch(`${host}/api/delete`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function isOllamaInstalled(): Promise<boolean> {

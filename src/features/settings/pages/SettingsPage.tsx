@@ -96,8 +96,40 @@ export default function SettingsPage() {
   ];
 
   return (
-    <div style={{ padding: 24, background: '#0f172a', color: 'white', height: '100%', overflow: 'auto' }} aria-label="Settings">
+    <div className="page" aria-label="Settings">
       <h1 style={{ fontSize: 28, fontWeight: 600, marginBottom: 32, color: 'white' }}>Settings</h1>
+
+      <section style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16, color: '#8b5cf6' }}>Mode</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 16, maxWidth: 800, alignItems: 'center' }}>
+          <label style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: 500 }}>Experience</label>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }} role="radiogroup" aria-label="Experience mode">
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255, 255, 255, 0.9)' }}>
+              <input
+                type="radio"
+                name="mode"
+                value="beginner"
+                checked={(settings.mode || 'beginner') === 'beginner'}
+                onChange={() => { setSettings({ ...settings, mode: 'beginner' }); save({ mode: 'beginner' }); }}
+              />
+              Beginner
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'rgba(255, 255, 255, 0.9)' }}>
+              <input
+                type="radio"
+                name="mode"
+                value="power"
+                checked={settings.mode === 'power'}
+                onChange={() => { setSettings({ ...settings, mode: 'power' }); save({ mode: 'power' }); }}
+              />
+              Power user
+            </label>
+            <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 13 }}>
+              Power mode allows installing large models with a confirmation.
+            </span>
+          </div>
+        </div>
+      </section>
       
       <section style={{ marginBottom: 48 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20, color: '#8b5cf6' }}>General</h2>
@@ -367,12 +399,6 @@ export default function SettingsPage() {
             </div>
           </div>
           
-          <style>{`
-            @keyframes shimmer {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(100%); }
-            }
-          `}</style>
         </>
       )}
     </div>

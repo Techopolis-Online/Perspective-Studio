@@ -1,6 +1,6 @@
 {
   "name": "perspective-studio-electron",
-  "version": "0.1.0",
+  "version": "0.1.1-beta.1",
   "license": "MIT",
   "private": false,
   "description": "Electron + React (Vite) port of Perspective Studio (LM Studio–like)",

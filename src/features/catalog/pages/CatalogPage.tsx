@@ -11,6 +11,7 @@ export default function CatalogPage() {
   const [totalMemBytes, setTotalMemBytes] = useState<number | null>(null);
   const [filterWorksOnDevice, setFilterWorksOnDevice] = useState(false);
   const [openerEl, setOpenerEl] = useState<HTMLElement | null>(null);
+  const [installedModels, setInstalledModels] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -21,6 +22,10 @@ export default function CatalogPage() {
       setLoading(true);
       const models = await window.api.ollama.catalog.listTop(500);
       setResults(Array.isArray(models) ? models : []);
+      try {
+        const installed = await window.api.ollama.listModels();
+        setInstalledModels(Array.isArray(installed) ? installed : []);
+      } catch {}
       setLoading(false);
     })();
   }, []);
@@ -48,7 +53,7 @@ export default function CatalogPage() {
       return {
         ok: true,
         level: 'unknown',
-        text: 'Compatible - size unknown',
+        text: 'Compatible (size unknown)',
         badge: 'Compatible',
       } as const;
     }
@@ -58,7 +63,7 @@ export default function CatalogPage() {
       return {
         ok: true,
         level: 'great',
-        text: `Runs fast (${sizeGb.toFixed(1)} GB model, ${ramGb.toFixed(1)} GB RAM)`,
+        text: `Runs fast (requires ~${sizeGb.toFixed(1)} GB)`,
         badge: 'Runs Fast',
       } as const;
     }
@@ -66,7 +71,7 @@ export default function CatalogPage() {
       return {
         ok: true,
         level: 'good',
-        text: `Runs well (${sizeGb.toFixed(1)} GB model, ${ramGb.toFixed(1)} GB RAM)`,
+        text: `Runs well (requires ~${sizeGb.toFixed(1)} GB)`,
         badge: 'Runs Well',
       } as const;
     }
@@ -74,14 +79,14 @@ export default function CatalogPage() {
       return {
         ok: true,
         level: 'caution',
-        text: `Runs slowly (${sizeGb.toFixed(1)} GB model uses most of ${ramGb.toFixed(1)} GB RAM)`,
+        text: `Runs slowly (requires ~${sizeGb.toFixed(1)} GB)`,
         badge: 'Runs Slowly',
       } as const;
     }
     return {
       ok: false,
       level: 'bad',
-      text: `Too large (${sizeGb.toFixed(1)} GB model exceeds ${ramGb.toFixed(1)} GB RAM)`,
+      text: `Too large (requires ~${sizeGb.toFixed(1)} GB)`,
       badge: 'Too Large',
     } as const;
   }
@@ -106,6 +111,13 @@ export default function CatalogPage() {
   }
 
   async function download(repoId: string) {
+  }
+
+  async function refreshInstalled() {
+    try {
+      const installed = await window.api.ollama.listModels();
+      setInstalledModels(Array.isArray(installed) ? installed : []);
+    } catch {}
   }
 
   const filteredResults = filterWorksOnDevice 
@@ -134,7 +146,7 @@ export default function CatalogPage() {
 
   return (
     <>
-      <div style={{ padding: 24, background: '#0f172a', color: 'white', height: '100%', overflow: 'auto' }} aria-label="Catalog">
+      <div className="page" aria-label="Catalog">
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: 28, margin: '0 0 8px 0', color: 'white' }}>Model Catalog</h2>
           <p style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: 14, margin: 0 }}>
@@ -226,6 +238,9 @@ export default function CatalogPage() {
         }}>
           {filteredResults.map((model) => {
             const comp = compatibilityFor(model);
+            const desc = (model.description || '').replace(/\.*\s*$/, '');
+            const isInstalled = installedModels.includes(model.repo_id);
+            const summary = `${model.repo_id}. ${desc} ${comp.text}${isInstalled ? ' · Downloaded' : ''}`.trim();
             return (
               <button
                 key={model.repo_id}
@@ -240,8 +255,7 @@ export default function CatalogPage() {
                   transition: 'all 0.2s',
                   color: 'white',
                 }}
-                aria-label={`${model.repo_id}. ${model.description || ''}. ${comp.text}.`}
-                aria-describedby={`comp-${model.repo_id}`}
+                aria-label={summary}
                 onMouseOver={(e) => {
                   e.currentTarget.style.background = 'rgba(30, 41, 59, 1)';
                   e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.5)';
@@ -253,59 +267,20 @@ export default function CatalogPage() {
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                <h3 style={{ 
-                  color: 'white', 
-                  fontSize: 18, 
-                  fontWeight: 600, 
-                  margin: '0 0 8px 0',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}>
-                  {model.repo_id}
-                </h3>
-                
-                <p style={{ 
-                  color: 'rgba(255, 255, 255, 0.7)', 
-                  fontSize: 13, 
-                  lineHeight: 1.5,
-                  margin: '0 0 12px 0',
-                  height: 60,
-                  overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 3,
-                  WebkitBoxOrient: 'vertical',
-                }}>
-                  {model.description}
-                </p>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12 }}>
-                    {bytesToGb(model.smallestGgufSize)?.toFixed(1)} GB
-                  </span>
-                  <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: 11 }}>
-                    {model.likes > 0 ? `${model.likes} ❤️` : ''}
-                  </span>
-                </div>
-
-                <span id={`comp-${model.repo_id}`} style={{
-                  display: 'inline-block',
-                  background: comp.level === 'great' ? 'rgba(34,197,94,0.15)' :
-                              comp.level === 'good' ? 'rgba(59,130,246,0.15)' :
-                              comp.level === 'caution' ? 'rgba(251,191,36,0.15)' :
-                              comp.level === 'bad' ? 'rgba(239,68,68,0.15)' :
-                              'rgba(148,163,184,0.15)',
-                  color: comp.level === 'great' ? '#86efac' :
-                         comp.level === 'good' ? '#60a5fa' :
-                         comp.level === 'caution' ? '#fbbf24' :
-                         comp.level === 'bad' ? '#fca5a5' :
-                         '#94a3b8',
-                  padding: '4px 8px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 600,
-                }}>
-                  {comp.badge}
+                <span
+                  role="heading"
+                  aria-level={3}
+                  style={{ 
+                    color: 'white', 
+                    fontSize: 16, 
+                    fontWeight: 600, 
+                    margin: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {summary}
                 </span>
               </button>
             );
@@ -333,6 +308,9 @@ export default function CatalogPage() {
         compatibility={selectedModel ? compatibilityFor(selectedModel) : { ok: false, level: 'unknown', text: '' }}
         onClose={closeModal}
         onDownload={download}
+        installedNames={installedModels}
+        onDownloaded={async () => { await refreshInstalled(); }}
+        onRemoved={async () => { await refreshInstalled(); }}
         returnFocusEl={openerEl}
       />
     </>

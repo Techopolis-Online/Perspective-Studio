@@ -1,0 +1,80 @@
+/* App layout */
+.app {
+	display: flex;
+	height: 100vh;
+	font-family: system-ui, sans-serif;
+	background: #0f172a;
+	color: #ffffff;
+}
+
+.app-content {
+	flex: 1;
+	overflow: auto;
+	background: #0f172a;
+}
+
+/* Generic page container */
+.page {
+	padding: 24px;
+	background: #0f172a;
+	color: #ffffff;
+	height: 100%;
+	overflow: auto;
+}
+
+/* Sidebar */
+.sidebar {
+	width: 180px;
+	border-right: 1px solid rgba(99, 102, 241, 0.2);
+	padding: 8px;
+	background: rgba(15, 23, 42, 0.5);
+}
+
+.sidebar-title {
+	font-size: 16px;
+	margin: 8px 8px 12px;
+	color: #ffffff;
+}
+
+.sidebar-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.sidebar-button {
+	width: 100%;
+	text-align: left;
+	background: transparent;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 6px;
+	padding: 8px 10px;
+	margin: 4px 6px;
+	cursor: pointer;
+	color: #ffffff;
+	transition: all 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.sidebar-button[aria-current="page"] {
+	background: rgba(99, 102, 241, 0.3);
+	border-color: rgba(99, 102, 241, 0.5);
+}
+
+.sidebar-button:hover {
+	background: rgba(255, 255, 255, 0.1);
+	border-color: rgba(255, 255, 255, 0.2);
+}
+
+.kbd {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 11px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 2px 6px;
+	margin-left: 8px;
+}
+
+

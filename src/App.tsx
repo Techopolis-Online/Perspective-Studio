@@ -98,9 +98,9 @@ export default function App() {
   }, [view, settings]);
 
   return (
-    <div style={{ display: 'flex', height: '100vh', fontFamily: 'system-ui, sans-serif', background: '#0f172a', color: 'white' }}>
+    <div className="app">
       <Sidebar current={view} onNavigate={(v) => setView(v as View)} />
-      <div style={{ flex: 1, overflow: 'auto', background: '#0f172a' }}>{content}</div>
+      <div className="app-content">{content}</div>
     </div>
   );
 }
