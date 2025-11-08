@@ -7,6 +7,24 @@ type ChatCallbacks = {
 };
 
 contextBridge.exposeInMainWorld('api', {
+  menu: {
+    onNewChat: (cb: () => void) => {
+      const handler = () => cb();
+      ipcRenderer.on('menu:new-chat', handler);
+      return () => ipcRenderer.removeListener('menu:new-chat', handler);
+    },
+    onNavigate: (cb: (view: 'Chat' | 'Catalog' | 'Downloads' | 'Settings') => void) => {
+      const handler = (_: unknown, payload: { view: 'Chat' | 'Catalog' | 'Downloads' | 'Settings' }) => cb(payload.view);
+      ipcRenderer.on('menu:navigate', handler);
+      return () => ipcRenderer.removeListener('menu:navigate', handler);
+    },
+    onOpenChat: (cb: (id: string) => void) => {
+      const handler = (_: unknown, payload: { id: string }) => cb(payload.id);
+      ipcRenderer.on('menu:open-chat', handler);
+      return () => ipcRenderer.removeListener('menu:open-chat', handler);
+    },
+    setRecentChats: (items: Array<{ id: string; title: string }>) => ipcRenderer.invoke('menu:setRecentChats', { items }),
+  },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     update: (partial: Record<string, unknown>) => ipcRenderer.invoke('settings:update', partial),

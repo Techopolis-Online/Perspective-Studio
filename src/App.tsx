@@ -26,6 +26,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!window.api?.menu) return;
+    const offNavigate = window.api.menu.onNavigate((v: 'Chat' | 'Catalog' | 'Downloads' | 'Settings') => {
+      setView(v as View);
+    });
+    const offNewChat = window.api.menu.onNewChat(() => {
+      setView('Chat');
+      window.dispatchEvent(new CustomEvent('app:new-chat'));
+    });
+    const offOpenChat = window.api.menu.onOpenChat((id: string) => {
+      setView('Chat');
+      window.dispatchEvent(new CustomEvent('app:open-chat', { detail: id }));
+    });
+    return () => {
+      offNavigate && offNavigate();
+      offNewChat && offNewChat();
+      offOpenChat && offOpenChat();
+    };
+  }, []);
+
+  useEffect(() => {
     // Keyboard shortcuts for navigation
     const handleKeyDown = (e: KeyboardEvent) => {
       // Skip if user is typing in an input field

@@ -32,10 +32,15 @@ This starts:
 - `npm run start`: run Electron using built files in `dist/`
 
 ## Packaging
+- Create installer (NSIS on Windows; see `package.json > build`):
 ```bash
-npm run dist
+npm run dist:build
 ```
-Artifacts are written under `release/` (see `package.json > build`).
+- Create unpacked directory only (no installer):
+```bash
+npm run dist:dir
+```
+Artifacts are written to `release/`.
 
 ## Project Structure
 ```

@@ -10,6 +10,7 @@ export default function CatalogPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [totalMemBytes, setTotalMemBytes] = useState<number | null>(null);
   const [filterWorksOnDevice, setFilterWorksOnDevice] = useState(false);
+  const [openerEl, setOpenerEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -93,6 +94,8 @@ export default function CatalogPage() {
   }
 
   function openModal(model: ModelEntry) {
+    const el = document.activeElement as HTMLElement | null;
+    setOpenerEl(el && typeof el.focus === 'function' ? el : null);
     setSelectedModel(model);
     setModalOpen(true);
   }
@@ -237,6 +240,8 @@ export default function CatalogPage() {
                   transition: 'all 0.2s',
                   color: 'white',
                 }}
+                aria-label={`${model.repo_id}. ${model.description || ''}. ${comp.text}.`}
+                aria-describedby={`comp-${model.repo_id}`}
                 onMouseOver={(e) => {
                   e.currentTarget.style.background = 'rgba(30, 41, 59, 1)';
                   e.currentTarget.style.borderColor = 'rgba(139, 92, 246, 0.5)';
@@ -283,7 +288,7 @@ export default function CatalogPage() {
                   </span>
                 </div>
 
-                <span style={{
+                <span id={`comp-${model.repo_id}`} style={{
                   display: 'inline-block',
                   background: comp.level === 'great' ? 'rgba(34,197,94,0.15)' :
                               comp.level === 'good' ? 'rgba(59,130,246,0.15)' :
@@ -328,6 +333,7 @@ export default function CatalogPage() {
         compatibility={selectedModel ? compatibilityFor(selectedModel) : { ok: false, level: 'unknown', text: '' }}
         onClose={closeModal}
         onDownload={download}
+        returnFocusEl={openerEl}
       />
     </>
   );

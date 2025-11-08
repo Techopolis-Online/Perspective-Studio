@@ -16,12 +16,16 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [input, setInput] = useState<string>('');
+  const [isMentionOpen, setIsMentionOpen] = useState<boolean>(false);
+  const [mentionQuery, setMentionQuery] = useState<string>('');
+  const [activeMentionIndex, setActiveMentionIndex] = useState<number>(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [conversationToDelete, setConversationToDelete] = useState<string | null>(null);
   const streamingRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const announceRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
 
   const currentConv = conversations.find(c => c.id === currentConvId);
@@ -51,6 +55,13 @@ export default function ChatPage() {
   useEffect(() => {
     if (conversations.length > 0) {
       localStorage.setItem('conversations', JSON.stringify(conversations));
+      // Update File > Recent Chats in native menu (best-effort)
+      try {
+        const items = conversations.slice(0, 10).map(c => ({ id: c.id, title: c.title }));
+        if (window.api?.menu?.setRecentChats) {
+          window.api.menu.setRecentChats(items);
+        }
+      } catch {}
     }
   }, [conversations]);
 
@@ -105,6 +116,9 @@ export default function ChatPage() {
     setConversations(prev => 
       prev.map(c => c.id === id ? { ...c, ...updates } : c)
     );
+    if (updates.model && announceRef.current) {
+      announceRef.current.textContent = `Switched model to ${updates.model}`;
+    }
   }
 
   async function generateTitle(messages: LlmMessage[]): Promise<string> {
@@ -222,6 +236,88 @@ export default function ChatPage() {
     transition: 'all 0.2s'
   };
 
+  const defaultModelSuggestions = [
+    'llama3:latest',
+    'llama3.1:8b',
+    'mistral:latest',
+    'mixtral:8x7b',
+    'qwen2.5:7b',
+    'gemma2:9b',
+    'phi3:mini',
+    'codellama:7b',
+    'deepseek-coder:6.7b',
+    'zephyr:7b',
+  ];
+
+  const mentionOptions = (models.length > 0 ? models : defaultModelSuggestions);
+
+  const mentionMatches = mentionOptions
+    .filter(m => mentionQuery ? m.toLowerCase().includes(mentionQuery.toLowerCase()) : true)
+    .slice(0, 8);
+
+  function findActiveMention(text: string, caret: number): { triggerIndex: number; query: string } | null {
+    // Look back from caret to find an '@' that starts the token, stopping at whitespace
+    let i = caret - 1;
+    while (i >= 0 && !/\s/.test(text[i])) {
+      i--;
+    }
+    const tokenStart = i + 1;
+    if (text[tokenStart] === '@') {
+      const query = text.slice(tokenStart + 1, caret);
+      return { triggerIndex: tokenStart, query };
+    }
+    return null;
+  }
+
+  function applyMentionSelection(modelName: string) {
+    if (!inputRef.current) return;
+    const el = inputRef.current;
+    const caret = el.selectionStart ?? input.length;
+    const active = findActiveMention(input, caret);
+    if (!active) return;
+    const before = input.slice(0, active.triggerIndex);
+    const after = input.slice(caret);
+    const inserted = `@${modelName}`;
+    const nextValue = `${before}${inserted}${after}`;
+    setInput(nextValue);
+    // Move caret to end of inserted mention
+    requestAnimationFrame(() => {
+      const pos = (before + inserted).length;
+      el.setSelectionRange(pos, pos);
+      el.focus();
+    });
+    setIsMentionOpen(false);
+    setMentionQuery('');
+    setActiveMentionIndex(0);
+    if (currentConv) {
+      updateConversation(currentConv.id, { model: modelName });
+    }
+  }
+
+  useEffect(() => {
+    const handler = () => {
+      createNewConversation(models[0] || '');
+    };
+    window.addEventListener('app:new-chat', handler as EventListener);
+    return () => {
+      window.removeEventListener('app:new-chat', handler as EventListener);
+    };
+  }, [models]);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const custom = e as CustomEvent<string>;
+      const id = custom.detail;
+      if (!id) return;
+      const exists = conversations.find(c => c.id === id);
+      if (exists) {
+        setCurrentConvId(id);
+      }
+    };
+    window.addEventListener('app:open-chat', handler as EventListener);
+    return () => window.removeEventListener('app:open-chat', handler as EventListener);
+  }, [conversations]);
+
   return (
     <div style={{ display: 'flex', height: '100%', background: '#0f172a' }} aria-label="Chat">
       <div style={{ 
@@ -306,7 +402,7 @@ export default function ChatPage() {
                 }}
                 aria-label="Delete conversation"
               >
-                <span aria-hidden="true">×</span>
+                <span aria-hidden="true">?</span>
               </button>
             </div>
           ))}
@@ -336,8 +432,28 @@ export default function ChatPage() {
             }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 18, color: 'white' }}>{currentConv.title}</h2>
-                <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.6)', marginTop: 4 }}>
-                  Model: {currentConv.model}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+                  <label htmlFor="header-model-select" style={{ color: 'rgba(255, 255, 255, 0.8)', fontSize: 13 }}>Model</label>
+                  <select
+                    id="header-model-select"
+                    aria-label="Select model for this chat"
+                    value={currentConv.model}
+                    onChange={(e) => updateConversation(currentConv.id, { model: e.target.value })}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: 6,
+                      border: '1px solid rgba(99, 102, 241, 0.4)',
+                      background: '#1f2937',
+                      color: 'white',
+                      fontSize: 13
+                    }}
+                  >
+                    {models.map((m) => (
+                      <option key={m} value={m} style={{ background: '#1e293b', color: 'white' }}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <button
@@ -354,7 +470,7 @@ export default function ChatPage() {
                   e.currentTarget.style.background = '#8b5cf6';
                 }}
               >
-                ⚙️ Settings
+                ?? Settings
               </button>
             </div>
 
@@ -475,12 +591,56 @@ export default function ChatPage() {
               <div style={{ display: 'flex', gap: 12 }}>
                 <input
                   aria-label="Message"
+                  aria-autocomplete="list"
+                  aria-controls={isMentionOpen ? 'mention-listbox' : undefined}
+                  aria-expanded={isMentionOpen}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  ref={inputRef}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setInput(value);
+                    const caret = e.target.selectionStart ?? value.length;
+                    const active = findActiveMention(value, caret);
+                    if (active) {
+                      setIsMentionOpen(true);
+                      setMentionQuery(active.query);
+                      setActiveMentionIndex(0);
+                    } else {
+                      setIsMentionOpen(false);
+                      setMentionQuery('');
+                    }
+                  }}
                   onKeyDown={(e) => {
+                    if (e.key === '@' || (e.shiftKey && e.key === '2')) {
+                      // Open suggestions immediately on '@'
+                      setIsMentionOpen(true);
+                      setMentionQuery('');
+                      setActiveMentionIndex(0);
+                    }
                     if (e.key === 'Enter' && !e.shiftKey && !streamingRef.current) {
                       e.preventDefault();
                       send();
+                      return;
+                    }
+                    if (isMentionOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+                      e.preventDefault();
+                      const dir = e.key === 'ArrowDown' ? 1 : -1;
+                      const next = (activeMentionIndex + dir + mentionMatches.length) % Math.max(mentionMatches.length, 1);
+                      setActiveMentionIndex(next);
+                      return;
+                    }
+                    if (isMentionOpen && e.key === 'Enter') {
+                      if (mentionMatches[activeMentionIndex]) {
+                        e.preventDefault();
+                        applyMentionSelection(mentionMatches[activeMentionIndex]);
+                      }
+                      return;
+                    }
+                    if (isMentionOpen && e.key === 'Escape') {
+                      e.preventDefault();
+                      setIsMentionOpen(false);
+                      setMentionQuery('');
+                      return;
                     }
                   }}
                   style={{ ...inputStyle, flex: 1, fontSize: 15 }}
@@ -496,6 +656,8 @@ export default function ChatPage() {
                     opacity: (!currentConv.model || !input || streamingRef.current) ? 0.5 : 1,
                     cursor: (!currentConv.model || !input || streamingRef.current) ? 'not-allowed' : 'pointer'
                   }}
+                  aria-label="Send message"
+                  title="Send (Enter)"
                   onMouseOver={(e) => {
                     if (currentConv.model && input && !streamingRef.current) {
                       e.currentTarget.style.background = '#7c3aed';
@@ -507,7 +669,23 @@ export default function ChatPage() {
                     }
                   }}
                 >
-                  {streamingRef.current ? 'Sending...' : 'Send'}
+                  {streamingRef.current ? 'Sending...' : (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <span>Send</span>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          fontSize: 11,
+                          color: 'rgba(255, 255, 255, 0.85)',
+                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          padding: '2px 6px',
+                          borderRadius: 4
+                        }}
+                      >
+                        Enter
+                      </span>
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -583,7 +761,7 @@ export default function ChatPage() {
                     }}
                     aria-label="Close modal"
                   >
-                    <span aria-hidden="true">×</span>
+                    <span aria-hidden="true">?</span>
                   </button>
                 </div>
               </div>
@@ -645,6 +823,47 @@ export default function ChatPage() {
                   </button>
                 </div>
               </div>
+              {isMentionOpen && mentionMatches.length > 0 && (
+                <div
+                  id="mention-listbox"
+                  role="listbox"
+                  aria-label="Model suggestions"
+                  aria-activedescendant={`mention-option-${activeMentionIndex}`}
+                  style={{
+                    marginTop: 8,
+                    maxHeight: 240,
+                    overflowY: 'auto',
+                    background: '#0b1220',
+                    border: '1px solid rgba(99, 102, 241, 0.4)',
+                    borderRadius: 8,
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
+                  }}
+                >
+                  {mentionMatches.map((m, idx) => (
+                    <div
+                      key={m}
+                      id={`mention-option-${idx}`}
+                      role="option"
+                      aria-selected={idx === activeMentionIndex}
+                      onMouseDown={(e) => {
+                        // prevent input from losing focus before we apply insertion
+                        e.preventDefault();
+                        applyMentionSelection(m);
+                      }}
+                      onMouseEnter={() => setActiveMentionIndex(idx)}
+                      style={{
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                        background: idx === activeMentionIndex ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                        color: 'white',
+                        borderBottom: '1px solid rgba(99, 102, 241, 0.1)'
+                      }}
+                    >
+                      @{m}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </>

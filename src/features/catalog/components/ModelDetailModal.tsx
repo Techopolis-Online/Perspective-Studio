@@ -17,18 +17,30 @@ interface ModelDetailModalProps {
   };
   onClose: () => void;
   onDownload: (repoId: string) => void;
+  returnFocusEl?: HTMLElement | null;
 }
 
-export default function ModelDetailModal({ isOpen, model, compatibility, onClose, onDownload }: ModelDetailModalProps) {
+export default function ModelDetailModal({ isOpen, model, compatibility, onClose, onDownload, returnFocusEl }: ModelDetailModalProps) {
   const [downloading, setDownloading] = useState(false);
   const [downloadStatus, setDownloadStatus] = useState('');
   const [progress, setProgress] = useState(0);
+  const downloadBtnRef = React.useRef<HTMLButtonElement>(null);
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const liveRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isOpen) {
       setDownloading(false);
       setDownloadStatus('');
       setProgress(0);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen) {
+      // Move focus into the modal to the primary action
+      const toFocus = downloadBtnRef.current || containerRef.current;
+      toFocus?.focus();
     }
   }, [isOpen]);
 
@@ -47,6 +59,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
         if (percentMatch) {
           const percent = parseInt(percentMatch[1]);
           setProgress(percent);
+          if (liveRef.current) liveRef.current.textContent = `Download progress: ${percent}%`;
         } else if (status.toLowerCase().includes('pulling') || status.toLowerCase().includes('downloading')) {
           setDownloadStatus(`Downloading: ${status}`);
         } else if (status.toLowerCase().includes('success') || status.toLowerCase().includes('complete')) {
@@ -57,11 +70,16 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
 
       setProgress(100);
       setDownloadStatus('Model installed successfully!');
+      if (liveRef.current) liveRef.current.textContent = `Model ${model.repo_id} installed successfully`;
       
       setTimeout(() => {
         setDownloading(false);
         onClose();
-      }, 2000);
+        // Restore focus to the element that opened the modal
+        if (returnFocusEl) {
+          requestAnimationFrame(() => returnFocusEl.focus());
+        }
+      }, 1200);
     } catch (error) {
       setDownloadStatus(`Error: ${error}`);
       setDownloading(false);
@@ -90,7 +108,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
           justifyContent: 'center',
           padding: 20,
         }}
-        onClick={downloading ? undefined : onClose}
+        onClick={downloading ? undefined : () => { onClose(); if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus()); }}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
@@ -108,6 +126,16 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             border: '1px solid rgba(99, 102, 241, 0.3)',
           }}
           onClick={(e) => e.stopPropagation()}
+          ref={containerRef}
+          tabIndex={-1}
+          aria-busy={downloading}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !downloading) {
+              e.preventDefault();
+              onClose();
+              if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus());
+            }
+          }}
         >
           <div style={{
             padding: '24px 24px 16px 24px',
@@ -229,6 +257,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                   style={{ position: 'absolute', left: '-9999px' }}
                   aria-live="assertive"
                   aria-atomic="true"
+                  ref={liveRef}
                 >
                   Download progress: {progress}%
                 </div>
@@ -260,6 +289,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                   fontSize: 16,
                   transition: 'all 0.2s',
                 }}
+                ref={downloadBtnRef}
                 onMouseOver={(e) => {
                   if (compatibility.ok && !downloading) {
                     e.currentTarget.style.background = '#7c3aed';
@@ -277,7 +307,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
               
               {!downloading && (
                 <button
-                  onClick={onClose}
+                  onClick={() => { onClose(); if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus()); }}
                   style={{
                     padding: '12px 24px',
                     borderRadius: 8,

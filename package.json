@@ -14,7 +14,9 @@
     "build": "npm run build:main && npm run build:renderer",
     "build:main": "tsc -p tsconfig.electron.json && tsc -p tsconfig.electron-preload.json",
     "build:renderer": "vite build",
-    "dist": "npm run build && electron-builder --dir=false",
+    "dist": "npm run dist:build",
+    "dist:build": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir",
     "start": "electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit && tsc -p tsconfig.electron-preload.json --noEmit",
     "lint": "eslint \"{electron,src}/**/*.{ts,tsx}\"",
@@ -30,6 +32,20 @@
     ],
     "directories": {
       "output": "release"
+    },
+    "afterPack": "build/afterPack.cjs",
+    "afterSign": "build/notarize.cjs",
+    "mac": {
+      "target": ["zip"],
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}",
+      "notarize": false,
+      "signIgnore": [
+        ".*Electron Framework\\.framework/Versions/[^/]+/Resources/.*",
+        ".*\\.lproj/.*",
+        ".*\\.pak$"
+      ]
     },
     "win": {
       "target": "nsis",
@@ -51,6 +67,7 @@
     "cross-env": "^7.0.3",
     "electron": "^31.4.0",
     "electron-builder": "^24.13.3",
+    "@electron/notarize": "^2.3.0",
     "eslint": "^8.57.0",
     "@typescript-eslint/eslint-plugin": "^7.18.0",
     "@typescript-eslint/parser": "^7.18.0",

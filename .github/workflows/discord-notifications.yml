@@ -1,0 +1,91 @@
+name: Discord Notifications
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, review_requested, closed]
+  issues:
+    types: [opened]
+  release:
+    types: [published, prereleased]
+  push:
+    branches: [main]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Discord for PR events
+        if: github.event_name == 'pull_request'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          ACTION="${{ github.event.action }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_AUTHOR="${{ github.event.pull_request.user.login }}"
+          REPO="${{ github.repository }}"
+
+          if [ "$ACTION" = "opened" ] || [ "$ACTION" = "reopened" ] || [ "$ACTION" = "ready_for_review" ]; then
+            CONTENT="🆕 New PR for review in ${REPO}\n• Title: ${PR_TITLE}\n• Author: ${PR_AUTHOR}\n${PR_URL}"
+          elif [ "$ACTION" = "review_requested" ]; then
+            CONTENT="🛎️ Review requested on PR in ${REPO}\n• Title: ${PR_TITLE}\n• Author: ${PR_AUTHOR}\n${PR_URL}"
+          elif [ "$ACTION" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            MERGED_BY="${{ github.event.pull_request.merged_by.login }}"
+            BASE_BRANCH="${{ github.event.pull_request.base.ref }}"
+            CONTENT="✅ PR merged in ${REPO}\n• Title: ${PR_TITLE}\n• Author: ${PR_AUTHOR}\n• Merged by: ${MERGED_BY}\n• Into: ${BASE_BRANCH}\n${PR_URL}"
+          else
+            CONTENT="🔔 PR event: ${ACTION} on ${PR_TITLE} by ${PR_AUTHOR}\n${PR_URL}"
+          fi
+
+          # Escape quotes for JSON
+          PAYLOAD=$(printf '{"content":"%s"}' "$(printf '%s' "$CONTENT" | sed 's/"/\\"/g')")
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+
+      - name: Notify Discord for pushes to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          REPO="${{ github.repository }}"
+          ACTOR="${{ github.actor }}"
+          HEAD_SHA="${GITHUB_SHA}"
+          SHORT_SHA="${HEAD_SHA::7}"
+          HEAD_MSG="${{ github.event.head_commit.message }}"
+          COMPARE_URL="${{ github.event.compare }}"
+          CONTENT="⬆️ Push to main in ${REPO}\n• By: ${ACTOR}\n• Head: ${SHORT_SHA}\n• Message: ${HEAD_MSG}\n${COMPARE_URL}"
+          PAYLOAD=$(printf '{"content":"%s"}' "$(printf '%s' "$CONTENT" | sed 's/"/\\"/g')")
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+
+      - name: Notify Discord for new issues
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          ISSUE_URL="${{ github.event.issue.html_url }}"
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_USER="${{ github.event.issue.user.login }}"
+          REPO="${{ github.repository }}"
+          CONTENT="🐞 New issue in ${REPO}\n• Title: ${ISSUE_TITLE}\n• Author: ${ISSUE_USER}\n${ISSUE_URL}"
+          PAYLOAD=$(printf '{"content":"%s"}' "$(printf '%s' "$CONTENT" | sed 's/"/\\"/g')")
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+
+      - name: Notify Discord for releases
+        if: github.event_name == 'release' && (github.event.action == 'published' || github.event.action == 'prereleased')
+        env:
+          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          NAME="${{ github.event.release.name }}"
+          TAG="${{ github.event.release.tag_name }}"
+          URL="${{ github.event.release.html_url }}"
+          REPO="${{ github.repository }}"
+          ACTION="${{ github.event.action }}"
+          EMOJI="🚀"
+          if [ "$ACTION" = "prereleased" ]; then EMOJI="🧪"; fi
+          DISPLAY_NAME="$NAME"
+          if [ -z "$DISPLAY_NAME" ]; then DISPLAY_NAME="$TAG"; fi
+          CONTENT="${EMOJI} New ${ACTION} in ${REPO}\n• ${DISPLAY_NAME}\n${URL}"
+          PAYLOAD=$(printf '{"content":"%s"}' "$(printf '%s' "$CONTENT" | sed 's/"/\\"/g')")
+          curl -sS -H "Content-Type: application/json" -X POST -d "$PAYLOAD" "$WEBHOOK_URL"
+
+
+
