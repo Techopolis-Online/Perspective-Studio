@@ -12,6 +12,10 @@ export default function CatalogPage() {
   const [filterWorksOnDevice, setFilterWorksOnDevice] = useState(false);
   const [openerEl, setOpenerEl] = useState<HTMLElement | null>(null);
   const [installedModels, setInstalledModels] = useState<string[]>([]);
+  const announceRef = React.useRef<HTMLDivElement>(null);
+  const searchDebounceRef = React.useRef<any>(null);
+  const lastSearchIdRef = React.useRef(0);
+  const announcePendingRef = React.useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -93,10 +97,42 @@ export default function CatalogPage() {
 
   async function search() {
     setLoading(true);
+    // Announce searching state for screen readers
+    announcePendingRef.current = true;
+    try { if (announceRef.current) announceRef.current.textContent = 'Searching…'; } catch {}
     const models = await window.api.ollama.catalog.search(query, 500);
     setResults(Array.isArray(models) ? models : []);
     setLoading(false);
   }
+
+  // Debounced live search when the query changes (announce in real time)
+  useEffect(() => {
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    const id = ++lastSearchIdRef.current;
+    // If user cleared query, still perform a search to repopulate
+    setLoading(true);
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        // Do not announce for debounce typing searches
+        announcePendingRef.current = false;
+        const models = await window.api.ollama.catalog.search(query, 500);
+        // Ignore stale responses
+        if (id !== lastSearchIdRef.current) return;
+        setResults(Array.isArray(models) ? models : []);
+      } finally {
+        if (id === lastSearchIdRef.current) setLoading(false);
+      }
+    }, 400);
+    return () => {
+      if (searchDebounceRef.current) {
+        clearTimeout(searchDebounceRef.current);
+        searchDebounceRef.current = null;
+      }
+    };
+  }, [query]);
 
   function openModal(model: ModelEntry) {
     const el = document.activeElement as HTMLElement | null;
@@ -123,6 +159,20 @@ export default function CatalogPage() {
   const filteredResults = filterWorksOnDevice 
     ? results.filter(model => compatibilityFor(model).ok)
     : results;
+
+  // Announce result counts when search completes or filters change
+  useEffect(() => {
+    if (loading) return;
+    const el = announceRef.current;
+    if (!el) return;
+    const count = filteredResults.length;
+    const q = (query || '').trim();
+    if (announcePendingRef.current) {
+      el.textContent = q ? `${count} results found for ${q}` : `${count} models shown`;
+      // Reset announce flag so changes triggered by typing/filters don't speak
+      announcePendingRef.current = false;
+    }
+  }, [loading, filteredResults, query]);
 
   const inputStyle = {
     padding: '10px 14px',
@@ -329,6 +379,25 @@ export default function CatalogPage() {
           </div>
         )}
       </div>
+
+      {/* SR-only live region for announcing search result counts */}
+      <div
+        ref={announceRef}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: 'hidden',
+          clip: 'rect(0, 0, 0, 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      />
 
       <ModelDetailModal
         isOpen={modalOpen}

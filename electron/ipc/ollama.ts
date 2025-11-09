@@ -856,7 +856,11 @@ function runCommand(cmd: string, waitForCompletion = true, timeoutMs = 300000): 
 // --- Ollama public catalog (best-effort; endpoints may change) ---
 async function ollamaFetch(path: string) {
   const url = `https://ollama.com${path}`;
-  const resp = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  const resp = await fetch(url, { headers: { 
+    'Accept': 'application/json',
+    // Use a browser-like UA to avoid upstream blocks
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
+  } });
   if (!resp.ok) throw new Error(String(resp.status));
   return resp.json();
 }
@@ -874,7 +878,7 @@ function normalizeOllamaItems(items: any[]): Array<{ repo_id: string; descriptio
   for (const it of items) {
     const name = String(it?.name || it?.model || '').trim();
     if (!name) continue;
-    const desc = String(it?.description || '').trim();
+    const desc = String(it?.description || it?.details?.description || '').trim();
     const likes = Number(it?.likes || 0) || 0;
     const downloads = Number(it?.downloads || it?.pull_count || 0) || 0;
     // Parse size more carefully - convert from GB string if needed
@@ -915,10 +919,103 @@ function normalizeOllamaItems(items: any[]): Array<{ repo_id: string; descriptio
   return out;
 }
 
-async function searchOllamaCatalog(query: string, limit = 500) {
+// Try to fetch the full library index from multiple possible sources
+async function fetchOllamaLibraryIndex(): Promise<any[]> {
+  // 1) Preferred: JSON tags endpoint
   try {
-    // Try the search endpoint
-    const res = await ollamaFetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const tags = await ollamaFetch(`/api/tags`);
+    const models = Array.isArray(tags?.models) ? tags.models : [];
+    if (models.length > 0) return models;
+  } catch {}
+
+  // 2) Alternate JSON endpoint
+  try {
+    const res = await ollamaFetch(`/api/models`);
+    const models = Array.isArray((res as any)?.models) ? (res as any).models : (Array.isArray(res) ? res : []);
+    if (models.length > 0) return models;
+  } catch {}
+
+  // 3) Fallback: scrape the library HTML for embedded Next.js data
+  try {
+    const url = `https://ollama.com/library`;
+    const resp = await fetch(url, { headers: { 
+      'Accept': 'text/html',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
+      'Referer': 'https://ollama.com/'
+    } });
+    if (resp.ok) {
+      const html = await resp.text();
+      // Next.js __NEXT_DATA__
+      const nextDataMatch = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (nextDataMatch && nextDataMatch[1]) {
+        try {
+          const json = JSON.parse(nextDataMatch[1]);
+          const found = findModelsArrayInObject(json);
+          if (Array.isArray(found) && found.length > 0) {
+            return found;
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return [];
+}
+
+function findModelsArrayInObject(obj: any): any[] | null {
+  try {
+    if (!obj || typeof obj !== 'object') return null;
+    // If obj looks like a model entry array
+    if (Array.isArray(obj) && obj.length > 0) {
+      // Consider it a models array if items have a 'name' or 'model' field
+      const looksLikeModels = obj.every((it) => it && typeof it === 'object' && ('name' in it || 'model' in it));
+      if (looksLikeModels) return obj;
+    }
+    // Recurse through keys
+    for (const key of Object.keys(obj)) {
+      const val = (obj as any)[key];
+      const sub = findModelsArrayInObject(val);
+      if (sub) return sub;
+    }
+  } catch {}
+  return null;
+}
+
+async function searchOllamaCatalog(query: string, limit = 500) {
+  const q = (query || '').trim();
+
+  // Prefer comprehensive index from /api/tags and filter client-side
+  try {
+    const models = await fetchOllamaLibraryIndex();
+    const tokens = q.toLowerCase().split(/\s+/).filter(Boolean);
+    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const tokenNorms = tokens.map(t => normalize(t));
+    const tokenVariants = tokenNorms.map(t => [t, t.replace(/\d+/g, '')].filter(Boolean));
+    const matched = tokens.length > 0
+      ? models.filter((m: any) => {
+          const nameRaw = String(m?.name || m?.model || '');
+          const descRaw = String(m?.description || m?.details?.description || '');
+          const base = nameRaw.split(':')[0];
+          const haystacks = [
+            nameRaw, base, nameRaw.replace(/[:._-]/g, ' '), descRaw,
+          ];
+          const normalizedHay = haystacks.map(s => normalize(s));
+          // Every token (or its digit-less variant) must appear in at least one normalized haystack
+          return tokenVariants.every(([tn, tnodigits]) => 
+            normalizedHay.some(h => h.includes(tn)) || (!!tnodigits && normalizedHay.some(h => h.includes(tnodigits!)))
+          );
+        })
+      : models;
+    if (matched.length > 0) {
+      return normalizeOllamaItems(matched).slice(0, limit);
+    }
+  } catch (e) {
+    console.error('Ollama tags fetch failed:', e);
+  }
+
+  // Fallback: server-side search endpoint (may be partial/top)
+  try {
+    const res = await ollamaFetch(`/api/search${q ? `?q=${encodeURIComponent(q)}` : ''}`);
     const items = Array.isArray(res?.models) ? res.models : (Array.isArray(res) ? res : []);
     if (items.length > 0) {
       return normalizeOllamaItems(items).slice(0, limit);
@@ -926,32 +1023,44 @@ async function searchOllamaCatalog(query: string, limit = 500) {
   } catch (e) {
     console.error('Ollama search failed:', e);
   }
-  
-  // Fallback: filter default models by query
-  const defaultModels = getDefaultOllamaModels();
-  if (!query || query.trim() === '') {
-    return defaultModels; // Return ALL models
-  }
-  const lowerQuery = query.toLowerCase();
-  return defaultModels.filter(m => 
-    m.repo_id.toLowerCase().includes(lowerQuery) || 
-    m.description.toLowerCase().includes(lowerQuery)
-  );
+
+  // Last resort: in-app defaults (quick fallback)
+  const defaults = getDefaultOllamaModels();
+  if (!q) return defaults;
+  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const token = normalize(q);
+  const tokenNoDigits = token.replace(/\d+/g, '');
+  return defaults.filter(m => {
+    const repo = normalize(m.repo_id);
+    const desc = normalize(m.description);
+    return repo.includes(token) || desc.includes(token) || 
+           (!!tokenNoDigits && (repo.includes(tokenNoDigits) || desc.includes(tokenNoDigits)));
+  });
 }
 
 async function listTopOllamaCatalog(limit = 500) {
+  // Try comprehensive index first
   try {
-    // Try to fetch the library models list
-    const res = await ollamaFetch(`/api/search`);
-    const items = Array.isArray(res?.models) ? res.models : (Array.isArray(res) ? res : []);
+    const items = await fetchOllamaLibraryIndex();
     if (items.length > 0) {
-      return normalizeOllamaItems(items);
+      return normalizeOllamaItems(items).slice(0, limit);
     }
   } catch (e) {
     console.error('Ollama catalog fetch failed:', e);
   }
-  
-  // Fallback: return ALL hardcoded models
+
+  // Fallback: try the partial search endpoint
+  try {
+    const res = await ollamaFetch(`/api/search`);
+    const items = Array.isArray(res?.models) ? res.models : (Array.isArray(res) ? res : []);
+    if (items.length > 0) {
+      return normalizeOllamaItems(items).slice(0, limit);
+    }
+  } catch (e) {
+    console.error('Ollama catalog fetch failed:', e);
+  }
+
+  // Last resort: return ALL hardcoded models
   return getDefaultOllamaModels();
 }
 
