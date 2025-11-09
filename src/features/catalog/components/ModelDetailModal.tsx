@@ -28,15 +28,33 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
   const [downloadStatus, setDownloadStatus] = useState('');
   const [progress, setProgress] = useState(0);
   const [removing, setRemoving] = useState(false);
+  const [descLoading, setDescLoading] = useState(false);
+  const [webDescription, setWebDescription] = useState<string | null>(null);
   const [mode, setMode] = useState<'beginner' | 'power'>('beginner');
   const downloadBtnRef = React.useRef<HTMLButtonElement>(null);
   const overlayRef = React.useRef<HTMLDivElement>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
   const liveRef = React.useRef<HTMLDivElement>(null);
+  const closeBtnRef = React.useRef<HTMLButtonElement>(null);
+  const dialogRef = React.useRef<HTMLDialogElement>(null);
+  const hasFocusedRef = React.useRef(false);
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const confirmOverlayRef = React.useRef<HTMLDivElement>(null);
   const confirmCancelRef = React.useRef<HTMLButtonElement>(null);
-  const dialogRef = React.useRef<HTMLDialogElement>(null);
+
+  function focusInitialElement() {
+    const candidates: Array<HTMLElement | null | undefined> = [
+      closeBtnRef.current,
+      containerRef.current,
+      dialogRef.current,
+    ];
+    for (const el of candidates) {
+      if (el && typeof el.focus === 'function') {
+        try { el.focus(); return true; } catch {}
+      }
+    }
+    return false;
+  }
 
   useEffect(() => {
     if (!isOpen) {
@@ -47,16 +65,28 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
   }, [isOpen]);
 
   useEffect(() => {
-    if (isOpen) {
-      const toFocus = downloadBtnRef.current || containerRef.current;
-      requestAnimationFrame(() => toFocus?.focus());
+    if (!isOpen) {
+      hasFocusedRef.current = false;
+      return;
     }
+    if (hasFocusedRef.current) return;
+    // Try focusing after paint
+    requestAnimationFrame(() => {
+      const ok = focusInitialElement();
+      if (!ok) {
+        // Retry once after a tick in case elements mount slightly later
+        setTimeout(() => {
+          if (!hasFocusedRef.current) focusInitialElement();
+        }, 0);
+      }
+    });
+    hasFocusedRef.current = true;
   }, [isOpen]);
 
   // When the confirmation dialog opens, move focus into it
   useEffect(() => {
     if (showDownloadConfirm) {
-      requestAnimationFrame(() => confirmCancelRef.current?.focus());
+      requestAnimationFrame(() => closeBtnRef.current?.focus());
     }
   }, [showDownloadConfirm]);
 
@@ -103,6 +133,37 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [isOpen, downloading, showDownloadConfirm, onClose, returnFocusEl]);
+
+  // Fetch latest description from ollama.com when opening modal
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchDesc() {
+      if (!isOpen || !model) return;
+      setDescLoading(true);
+      setWebDescription(null);
+      try {
+        const res = await (window as any).api.ollama.catalog.getDescription(model.repo_id);
+        if (!cancelled) {
+          const d = res?.description && String(res.description).trim();
+          setWebDescription(d && d.length > 0 ? d : null);
+        }
+      } catch {
+        if (!cancelled) setWebDescription(null);
+      } finally {
+        if (!cancelled) setDescLoading(false);
+        // Ensure focus remains in the dialog even after content updates
+        if (!cancelled && isOpen) {
+          requestAnimationFrame(() => {
+            if (!containerRef.current?.contains(document.activeElement)) {
+              focusInitialElement();
+            }
+          });
+        }
+      }
+    }
+    fetchDesc();
+    return () => { cancelled = true; };
+  }, [isOpen, model?.repo_id]);
 
   if (!isOpen || !model) return null;
 
@@ -237,6 +298,7 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             overflow: 'auto',
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
             border: '1px solid rgba(99, 102, 241, 0.3)',
+            position: 'relative',
           }}
           ref={containerRef}
           tabIndex={-1}
@@ -249,6 +311,27 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             }
           }}
         >
+          {!downloading && (
+            <button
+              ref={closeBtnRef}
+              onClick={() => { onClose(); if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus()); }}
+              style={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: 28,
+                cursor: 'pointer',
+                padding: '0 8px',
+                lineHeight: 1,
+              }}
+              aria-label="Close dialog"
+            >
+              ×
+            </button>
+          )}
           {/* Persistent live region for screen reader announcements */}
           <div
             role="status"
@@ -271,52 +354,34 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
             padding: '24px 24px 16px 24px',
             borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
           }}>
-            <h3
+            <h2
               id="modal-title"
               style={{
                 color: 'white',
                 fontSize: 24,
                 margin: 0,
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'start',
               }}
             >
-              <span style={{ flex: 1 }}>{model.repo_id}</span>
-              {!downloading && (
-                <button
-                  onClick={() => {
-                    onClose();
-                    if (returnFocusEl) requestAnimationFrame(() => returnFocusEl.focus());
-                  }}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: 'rgba(255, 255, 255, 0.7)',
-                    fontSize: 28,
-                    cursor: 'pointer',
-                    padding: '0 8px',
-                    lineHeight: 1,
-                  }}
-                  aria-label="Close modal"
-                >
-                  ×
-                </button>
-              )}
-            </h3>
+              {model.repo_id}
+            </h2>
           </div>
 
           <div id="modal-description" style={{ padding: 24 }}>
             <div style={{ marginBottom: 20 }}>
               <h3 style={{ color: 'rgba(255, 255, 255, 0.9)', fontSize: 16, marginBottom: 8 }}>Description</h3>
-              <p style={{ color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.6, margin: 0 }}>
-                {model.description || 'No description available.'}
+              <p 
+                style={{ color: 'rgba(255, 255, 255, 0.7)', lineHeight: 1.6, margin: 0 }}
+                aria-live="polite"
+              >
+                {descLoading
+                  ? 'Fetching description…'
+                  : (webDescription || model.description || 'No description available.')}
               </p>
             </div>
 
             <div style={{ 
               display: 'grid', 
-              gridTemplateColumns: '1fr 1fr', 
+              gridTemplateColumns: '1fr', 
               gap: 16,
               marginBottom: 20,
               padding: 16,
@@ -327,12 +392,6 @@ export default function ModelDetailModal({ isOpen, model, compatibility, onClose
                 <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12, marginBottom: 4 }}>Size</div>
                 <div style={{ color: 'white', fontSize: 16, fontWeight: 500 }}>
                   {formatSize(model.smallestGgufSize)}
-                </div>
-              </div>
-              <div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 12, marginBottom: 4 }}>Popularity</div>
-                <div style={{ color: 'white', fontSize: 16, fontWeight: 500 }}>
-                  {model.likes} likes
                 </div>
               </div>
             </div>

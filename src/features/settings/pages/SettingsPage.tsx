@@ -6,6 +6,7 @@ export default function SettingsPage() {
   const [resetting, setResetting] = useState(false);
   const [resetStatus, setResetStatus] = useState('');
   const resetButtonRef = React.useRef<HTMLButtonElement>(null);
+  const resetCloseBtnRef = React.useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     (async () => setSettings(await window.api.settings.get()))();
@@ -15,7 +16,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (showResetModal) {
-      resetButtonRef.current?.focus();
+      requestAnimationFrame(() => {
+        if (resetCloseBtnRef.current) {
+          resetCloseBtnRef.current.focus();
+        } else {
+          resetButtonRef.current?.focus();
+        }
+      });
     }
   }, [showResetModal]);
 
@@ -270,43 +277,45 @@ export default function SettingsPage() {
                 width: '100%',
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
                 border: '1px solid rgba(220, 38, 38, 0.5)',
+                position: 'relative',
               }}
               onClick={(e) => e.stopPropagation()}
             >
+              {!resetting && (
+                <button
+                  ref={resetCloseBtnRef}
+                  onClick={() => setShowResetModal(false)}
+                  style={{
+                    position: 'absolute',
+                    top: 12,
+                    right: 12,
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontSize: 28,
+                    cursor: 'pointer',
+                    padding: '0 8px',
+                    lineHeight: 1,
+                  }}
+                  aria-label="Close dialog"
+                >
+                  ×
+                </button>
+              )}
               <div style={{
                 padding: '24px 24px 16px 24px',
                 borderBottom: '1px solid rgba(220, 38, 38, 0.3)',
               }}>
-                <h3
+                <h2
                   id="reset-modal-title"
                   style={{
                     color: '#fca5a5',
                     fontSize: 24,
                     margin: 0,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'start',
                   }}
                 >
-                  <span style={{ flex: 1 }}>⚠️ Reset Everything</span>
-                  {!resetting && (
-                    <button
-                      onClick={() => setShowResetModal(false)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'rgba(255, 255, 255, 0.7)',
-                        fontSize: 28,
-                        cursor: 'pointer',
-                        padding: '0 8px',
-                        lineHeight: 1,
-                      }}
-                      aria-label="Close modal"
-                    >
-                      ×
-                    </button>
-                  )}
-                </h3>
+                  ⚠️ Reset Everything
+                </h2>
               </div>
 
               <div id="reset-modal-description" style={{ padding: 24 }}>

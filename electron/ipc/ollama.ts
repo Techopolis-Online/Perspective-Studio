@@ -343,6 +343,7 @@ export function registerOllamaIpc(ipcMain: IpcMain, win: BrowserWindow | null) {
   ipcMain.handle('ollama:checkUpdate', async () => checkForUpdate());
   ipcMain.handle('ollama:catalog:search', async (_evt, { query, limit }: { query: string; limit?: number }) => searchOllamaCatalog(query, limit));
   ipcMain.handle('ollama:catalog:listTop', async (_evt, { limit }: { limit?: number }) => listTopOllamaCatalog(limit));
+  ipcMain.handle('ollama:catalog:getDescription', async (_evt, { name }: { name: string }) => getOllamaModelDescription(name));
   ipcMain.handle('ollama:deleteModel', async (_evt, { name }: { name: string }) => deleteModelByName(name));
   ipcMain.handle('ollama:deleteAllModels', async () => deleteAllModels(win));
   ipcMain.handle('ollama:uninstall', async () => uninstallOllama(win));
@@ -952,6 +953,57 @@ async function listTopOllamaCatalog(limit = 500) {
   
   // Fallback: return ALL hardcoded models
   return getDefaultOllamaModels();
+}
+
+async function getOllamaModelDescription(name: string): Promise<{ description: string | null }> {
+  // Normalize to base model id without tag (e.g., "llama3:8b" -> "llama3")
+  const base = String(name || '').split(':')[0].trim();
+  if (!base) return { description: null };
+
+  // 1) Try the public search endpoint for a structured description
+  try {
+    const res = await ollamaFetch(`/api/search?q=${encodeURIComponent(base)}`);
+    const items = Array.isArray(res?.models) ? res.models : (Array.isArray(res) ? res : []);
+    if (items.length > 0) {
+      // Prefer exact match on name/model, else first item
+      const lower = base.toLowerCase();
+      const exact = items.find((it: any) => String(it?.name || it?.model || '').toLowerCase() === lower);
+      const best = exact || items.find((it: any) => String(it?.name || it?.model || '').toLowerCase().startsWith(lower)) || items[0];
+      const desc = String(best?.description || '').trim();
+      if (desc) return { description: desc };
+    }
+  } catch (e) {
+    // continue to fallback
+  }
+
+  // 2) Fallback: Fetch the library HTML page and parse meta/JSON-LD description
+  try {
+    const url = `https://ollama.com/library/${encodeURIComponent(base)}`;
+    const resp = await fetch(url, { headers: { 'Accept': 'text/html' } });
+    if (resp.ok) {
+      const html = await resp.text();
+      // Try meta description
+      const metaMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+      if (metaMatch && metaMatch[1]) {
+        return { description: metaMatch[1].trim() };
+      }
+      // Try JSON-LD
+      const ldMatch = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (ldMatch && ldMatch[1]) {
+        try {
+          const json = JSON.parse(ldMatch[1]);
+          if (json && typeof json === 'object') {
+            const desc = (json as any).description;
+            if (desc && typeof desc === 'string') {
+              return { description: desc.trim() };
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return { description: null };
 }
 
 function getDefaultOllamaModels(): Array<{ repo_id: string; description: string; likes: number; downloads: number; worksLocally: boolean; smallestGgufSize?: number; source: 'ollama' }> {

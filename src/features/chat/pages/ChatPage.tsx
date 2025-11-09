@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+  import React, { useEffect, useRef, useState } from 'react';
 import { LlmMessage } from '../../../shared/types/llm';
 
 interface Conversation {
@@ -29,6 +29,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const deleteModalCancelRef = useRef<HTMLButtonElement>(null);
   const deleteOverlayRef = useRef<HTMLDivElement>(null);
+  const deleteModalCloseRef = useRef<HTMLButtonElement>(null);
 
   const currentConv = conversations.find(c => c.id === currentConvId);
 
@@ -73,7 +74,7 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (showDeleteModal) {
-      requestAnimationFrame(() => deleteModalCancelRef.current?.focus());
+      requestAnimationFrame(() => deleteModalCloseRef.current?.focus());
     }
   }, [showDeleteModal]);
 
@@ -746,43 +747,45 @@ export default function ChatPage() {
                 width: '100%',
                 boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
                 border: '1px solid rgba(99, 102, 241, 0.3)',
+                position: 'relative',
               }}
             >
+              <button
+                ref={deleteModalCloseRef}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setConversationToDelete(null);
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontSize: 28,
+                  cursor: 'pointer',
+                  padding: '0 8px',
+                  lineHeight: 1,
+                }}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
               <div style={{
                 padding: '24px 24px 16px 24px',
                 borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
               }}>
-                <h3
+                <h2
                   id="delete-modal-title"
                   style={{
                     color: 'white',
                     fontSize: 24,
                     margin: 0,
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'start',
                   }}
                 >
-                  <span style={{ flex: 1 }}>Delete Conversation</span>
-                  <button
-                    onClick={() => {
-                      setShowDeleteModal(false);
-                      setConversationToDelete(null);
-                    }}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'rgba(255, 255, 255, 0.7)',
-                      fontSize: 28,
-                      cursor: 'pointer',
-                      padding: '0 8px',
-                      lineHeight: 1,
-                    }}
-                    aria-label="Close modal"
-                  >
-                    ×
-                  </button>
-                </h3>
+                  Delete Conversation
+                </h2>
               </div>
 
               <div id="delete-modal-description" style={{ padding: 24 }}>

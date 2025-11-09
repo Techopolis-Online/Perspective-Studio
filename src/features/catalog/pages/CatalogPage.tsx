@@ -238,9 +238,14 @@ export default function CatalogPage() {
         }}>
           {filteredResults.map((model) => {
             const comp = compatibilityFor(model);
-            const desc = (model.description || '').replace(/\.*\s*$/, '');
             const isInstalled = installedModels.includes(model.repo_id);
-            const summary = `${model.repo_id}. ${desc} ${comp.text}${isInstalled ? ' · Downloaded' : ''}`.trim();
+            const rawDesc = (model.description || '').replace(/\.*\s*$/, '');
+            const parts = rawDesc.split(' - ');
+            const primary = (parts[0] || '').trim();
+            const rest = (parts.slice(1).join(' - ') || '').trim();
+            const suffixFirstWord = (rest || '').split(/\s+/)[0] || '';
+            const titleText = (primary + (suffixFirstWord ? ` - ${suffixFirstWord}` : '')).trim() || model.repo_id;
+            const subText = `${(comp.level === 'bad' ? comp.text : comp.badge)}${isInstalled ? ' · Downloaded' : ''}`;
             return (
               <div
                 key={model.repo_id}
@@ -287,10 +292,24 @@ export default function CatalogPage() {
                       textAlign: 'left',
                       width: '100%',
                     }}
+                    aria-label={`${titleText}. ${subText}`}
                   >
-                    {summary}
+                    {titleText}
                   </button>
                 </h3>
+                <div
+                  style={{
+                    color: 'rgba(255, 255, 255, 0.7)',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    marginTop: 6,
+                  }}
+                >
+                  {subText}
+                </div>
               </div>
             );
           })}

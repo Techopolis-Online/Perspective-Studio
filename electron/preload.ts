@@ -102,6 +102,7 @@ contextBridge.exposeInMainWorld('api', {
     catalog: {
       search: (query: string, limit = 25) => ipcRenderer.invoke('ollama:catalog:search', { query, limit }),
       listTop: (limit = 25) => ipcRenderer.invoke('ollama:catalog:listTop', { limit }),
+      getDescription: (name: string): Promise<{ description: string | null }> => ipcRenderer.invoke('ollama:catalog:getDescription', { name }),
     },
     deleteModel: (name: string): Promise<boolean> => ipcRenderer.invoke('ollama:deleteModel', { name }),
     deleteAllModels: (): Promise<{ success: boolean; message?: string }> => ipcRenderer.invoke('ollama:deleteAllModels'),
