@@ -7,6 +7,11 @@ export default function SettingsPage() {
   const [resetStatus, setResetStatus] = useState('');
   const resetButtonRef = React.useRef<HTMLButtonElement>(null);
   const resetCloseBtnRef = React.useRef<HTMLButtonElement>(null);
+  const [showAboutModal, setShowAboutModal] = useState(false);
+  const aboutDialogRef = React.useRef<HTMLDialogElement>(null);
+  const aboutCloseBtnRef = React.useRef<HTMLButtonElement>(null);
+  const aboutContentRef = React.useRef<HTMLDivElement>(null);
+  const [appInfo, setAppInfo] = useState<{ version: string; build: string } | null>(null);
 
   useEffect(() => {
     (async () => setSettings(await window.api.settings.get()))();
@@ -27,15 +32,62 @@ export default function SettingsPage() {
   }, [showResetModal]);
 
   useEffect(() => {
+    if (showAboutModal) {
+      requestAnimationFrame(() => {
+        aboutCloseBtnRef.current?.focus();
+      });
+      (async () => {
+        try {
+          const info = await window.api.app.getInfo();
+          setAppInfo(info);
+        } catch {}
+      })();
+    }
+  }, [showAboutModal]);
+
+  useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showResetModal) {
+      if (e.key !== 'Escape') return;
+      if (showResetModal) {
         setShowResetModal(false);
+      }
+      if (showAboutModal) {
+        setShowAboutModal(false);
       }
     };
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [showResetModal]);
+  }, [showResetModal, showAboutModal]);
+
+  function trapFocusInAbout(e: React.KeyboardEvent<HTMLDialogElement>) {
+    if (e.key !== 'Tab' || !aboutContentRef.current) return;
+    const focusableSelectors = [
+      'a[href]',
+      'button:not([disabled])',
+      'textarea:not([disabled])',
+      'input:not([disabled])',
+      'select:not([disabled])',
+      '[tabindex]:not([tabindex="-1"])'
+    ].join(',');
+    const nodes = Array.from(aboutContentRef.current.querySelectorAll<HTMLElement>(focusableSelectors))
+      .filter((el) => !el.hasAttribute('disabled') && el.tabIndex !== -1 && el.offsetParent !== null);
+    if (nodes.length === 0) {
+      e.preventDefault();
+      return;
+    }
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    const active = document.activeElement as HTMLElement | null;
+
+    if (!e.shiftKey && active === last) {
+      e.preventDefault();
+      first.focus();
+    } else if (e.shiftKey && active === first) {
+      e.preventDefault();
+      last.focus();
+    }
+  }
 
   if (!settings) return <div style={{ padding: 24, color: 'white' }}>Loading…</div>;
 
@@ -208,6 +260,21 @@ export default function SettingsPage() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section style={{ marginBottom: 48 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 20, color: '#8b5cf6' }}>About</h2>
+        <p style={{ color: 'rgba(255, 255, 255, 0.75)', marginBottom: 16, lineHeight: 1.6 }}>
+          Learn more about Perspective Studio, links, and how to support development.
+        </p>
+        <button
+          onClick={() => setShowAboutModal(true)}
+          style={buttonStyle}
+          onMouseOver={(e) => { e.currentTarget.style.background = '#7c3aed'; }}
+          onMouseOut={(e) => { e.currentTarget.style.background = '#8b5cf6'; }}
+        >
+          Open About
+        </button>
       </section>
 
       <section style={{ 
@@ -417,6 +484,119 @@ export default function SettingsPage() {
           </div>
           
         </>
+      )}
+      
+      {showAboutModal && (
+        <dialog
+          ref={aboutDialogRef}
+          open
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="about-modal-title"
+          aria-describedby="about-modal-description"
+          onClick={(e) => {
+            if (e.target === aboutDialogRef.current) setShowAboutModal(false);
+          }}
+          onKeyDown={trapFocusInAbout}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.7)',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20,
+            width: '100vw',
+            height: '100vh',
+            border: 'none',
+            margin: 0,
+            maxWidth: 'none',
+            maxHeight: 'none',
+            overflow: 'visible',
+          }}
+        >
+          <div
+            ref={aboutContentRef}
+            style={{
+              background: '#1e293b',
+              borderRadius: 16,
+              maxWidth: 640,
+              width: '100%',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)',
+              border: '1px solid rgba(99, 102, 241, 0.4)',
+              position: 'relative',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              ref={aboutCloseBtnRef}
+              onClick={() => setShowAboutModal(false)}
+              style={{
+                position: 'absolute',
+                top: 12,
+                right: 12,
+                background: 'transparent',
+                border: 'none',
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: 28,
+                cursor: 'pointer',
+                padding: '0 8px',
+                lineHeight: 1,
+              }}
+              aria-label="Close dialog"
+            >
+              ×
+            </button>
+            <div style={{ padding: '24px 24px 12px 24px', borderBottom: '1px solid rgba(99, 102, 241, 0.3)' }}>
+              <h2
+                id="about-modal-title"
+                style={{ color: 'white', fontSize: 22, margin: 0 }}
+              >
+                About Perspective Studio
+              </h2>
+            </div>
+            <div id="about-modal-description" style={{ padding: 24 }}>
+              <p style={{ color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.7, marginBottom: 16 }}>
+                Perspective Studio helps you chat with local AI models via Ollama, browse a catalog of models,
+                download and manage them, and run conversations privately on your device.
+              </p>
+              <div style={{ display: 'flex', gap: 16, color: 'rgba(255, 255, 255, 0.7)', fontSize: 13, marginBottom: 12 }}>
+                <span>Version: {appInfo?.version || '—'}</span>
+                <span>Build: {appInfo?.build || '—'}</span>
+              </div>
+              <div style={{ display: 'grid', gap: 8, marginTop: 8, marginBottom: 16 }}>
+                <a
+                  href="https://discord.com/invite/ugH9xwFd4N"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  style={{ color: '#a78bfa', textDecoration: 'none' }}
+                >
+                  Join our Discord
+                </a>
+                <a
+                  href="https://github.com/Techopolis-Online/Perspective-Studio/issues"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  style={{ color: '#a78bfa', textDecoration: 'none' }}
+                >
+                  Report an issue
+                </a>
+                <a
+                  href="https://square.link/u/llukFoWd"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  style={{ color: '#a78bfa', textDecoration: 'none' }}
+                >
+                  Donate
+                </a>
+              </div>
+              <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 13 }}>
+                © {new Date().getFullYear()} Techopolis Online Solutions, LLC. All rights reserved.
+              </div>
+            </div>
+          </div>
+        </dialog>
       )}
     </div>
   );

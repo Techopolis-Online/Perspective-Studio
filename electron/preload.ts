@@ -118,6 +118,9 @@ contextBridge.exposeInMainWorld('api', {
       return ipcRenderer.invoke('ollama:resetEverything');
     },
   },
+  app: {
+    getInfo: (): Promise<{ version: string; build: string }> => ipcRenderer.invoke('app:getInfo'),
+  },
   system: {
     memory: (): Promise<{ totalMemBytes: number }> => ipcRenderer.invoke('system:memory'),
   },

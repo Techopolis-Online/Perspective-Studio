@@ -203,6 +203,13 @@ app.whenReady().then(async () => {
     if (mainWindow) buildAppMenu(mainWindow);
     return true;
   });
+
+  // App info for About modal
+  ipcMain.handle('app:getInfo', () => {
+    const version = app.getVersion();
+    const build = version.includes('-') ? version.split('-').slice(1).join('-') : 'stable';
+    return { version, build };
+  });
 });
 
 app.on('window-all-closed', () => {
