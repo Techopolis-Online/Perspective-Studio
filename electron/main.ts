@@ -17,7 +17,7 @@ function createMainWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     show: false,
-    title: 'perspective studio',
+    title: 'Perspective Studio',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

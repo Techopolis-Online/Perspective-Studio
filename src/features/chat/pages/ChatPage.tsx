@@ -354,7 +354,7 @@ export default function ChatPage() {
                   e.currentTarget.style.background = '#8b5cf6';
                 }}
               >
-                ⚙️ Settings
+                Settings
               </button>
             </div>
 
